@@ -1,0 +1,57 @@
+﻿ID;Nome;Tipo;Plataforma;Área;Carga Horária;Status;Prioridade
+1;Excel Básico;Curso;Fundação Bradesco;Excel;29;Concluído;Média
+2;Excel Intermediário;Curso;Fundação Bradesco;Excel;28;Concluído;Média
+3;Excel Avançado;Curso;Fundação Bradesco;Excel;31;Em andamento;Média
+4;Microsoft Word;Curso;Fundação Bradesco;Pacote Office;24;Planejado;Média
+5;Organização Pessoal e Gestão do Tempo;Curso;Fundação Bradesco;Produtividade;10;Planejado;Média
+6;Comunicação Empresarial;Curso;Fundação Bradesco;Comunicação;12;Planejado;Média
+7;Oratória e Comunicação;Curso;SEBRAE;Comunicação;16;Planejado;Média
+8;Microsoft Outlook;Curso;Fundação Bradesco;Pacote Office;14;Planejado;Média
+9;Microsoft PowerPoint;Curso;Fundação Bradesco;Pacote Office;20;Planejado;Média
+10;Atendimento ao Cliente;Curso;Fundação Bradesco;Desenvolvimento Profissional;10;Planejado;Média
+11;Inteligência Emocional;Curso;ENAP;Desenvolvimento Profissional;20;Planejado;Média
+12;Gestão de Projetos;Curso;ENAP;Gestão de Projetos;20;Planejado;Média
+13;LGPD;Curso;ENAP;Segurança e LGPD;10;Planejado;Média
+14;Inteligência Artificial para o Trabalho;Curso;Microsoft Learn;Inteligência Artificial;10;Planejado;Média
+15;Produtividade no Microsoft 365;Curso;Microsoft Learn;Produtividade;10;Planejado;Média
+16;Excel com IA;Curso;Microsoft Learn;Excel;10;Planejado;Média
+17;Matemática Financeira;Curso;Fundação Bradesco;Finanças;20;Planejado;Média
+18;Educação Financeira;Curso;ENAP;Finanças;20;Planejado;Média
+19;Contabilidade Básica;Curso;ENAP;Contabilidade;30;Planejado;Média
+20;Administração Financeira;Curso;ENAP;Finanças;30;Planejado;Média
+21;Gestão Financeira;Curso;SEBRAE;Finanças;20;Planejado;Média
+22;Fluxo de Caixa;Curso;SEBRAE;Finanças;12;Planejado;Média
+23;Planejamento Orçamentário;Curso;ENAP;Finanças;20;Planejado;Média
+24;Análise de Custos;Curso;SEBRAE;Controladoria;20;Planejado;Média
+25;Controladoria;Curso;ENAP;Controladoria;30;Planejado;Média
+26;Power Query;Curso;Microsoft Learn;Power BI;12;Planejado;Média
+27;Power BI – Introdução;Curso;ENAP;Power BI;20;Planejado;Média
+28;Power BI – Intermediário;Curso;Microsoft Learn;Power BI;20;Planejado;Média
+29;Power BI para Finanças;Curso;Microsoft Learn;Power BI;15;Planejado;Média
+30;DAX;Curso;Microsoft Learn;Power BI;15;Planejado;Média
+31;Modelagem de Dados;Curso;Microsoft Learn;Análise de Dados;15;Planejado;Média
+32;Dashboards;Curso;Microsoft Learn;Power BI;10;Planejado;Média
+33;KPIs e Indicadores;Curso;Microsoft Learn;Power BI;12;Planejado;Média
+34;Storytelling com Dados;Curso;Microsoft Learn;Análise de Dados;10;Planejado;Média
+35;Business Intelligence;Curso;Microsoft Learn;Power BI;15;Planejado;Média
+36;Power Pivot;Curso;Microsoft Learn;Power BI;15;Planejado;Média
+37;Power BI Service;Curso;Microsoft Learn;Power BI;12;Planejado;Média
+38;SQL Básico;Curso;Fundação Bradesco;Banco de Dados;20;Planejado;Média
+39;SQL Intermediário;Curso;Cisco Networking Academy;Banco de Dados;40;Planejado;Média
+40;Banco de Dados;Curso;Cisco Networking Academy;Banco de Dados;40;Planejado;Média
+41;Estatística para Análise de Dados;Curso;ENAP;Análise de Dados;30;Planejado;Média
+42;Python para Análise de Dados;Curso;Microsoft Learn;Programação;40;Planejado;Média
+43;Git e GitHub;Curso;Microsoft Learn;Programação;12;Planejado;Média
+44;Power Automate;Curso;Microsoft Learn;Automação;15;Planejado;Média
+45;Power Apps;Curso;Microsoft Learn;Automação;15;Planejado;Média
+46;Microsoft Copilot;Curso;Microsoft Learn;Inteligência Artificial;10;Planejado;Média
+47;Negociação Profissional;Curso;SEBRAE;Desenvolvimento Profissional;20;Planejado;Média
+48;Etiqueta e Postura Profissional;Curso;SEBRAE;Desenvolvimento Profissional;12;Planejado;Média
+49;Inglês para Negócios;Curso;Fundação Bradesco;Inglês;30;Planejado;Média
+50;Microsoft Office Specialist – Excel Associate;Certificação;Microsoft;Certificações;0;Planejado;Média
+51;Microsoft PL-300 – Power BI Data Analyst;Certificação;Microsoft;Certificações;0;Planejado;Média
+52;Scrum Foundation Professional Certificate;Certificação;Scrum Study;Certificações;0;Planejado;Média
+53;Lean Six Sigma White Belt;Certificação;Outros;Certificações;0;Planejado;Média
+54;Lean Six Sigma Yellow Belt;Certificação;Outros;Certificações;0;Planejado;Média
+55;Microsoft Azure Fundamentals (AZ-900);Certificação;Microsoft;Certificações;0;Planejado;Média
+56;Microsoft Azure Data Fundamentals (DP-900);Certificação;Microsoft;Certificações;0;Planejado;Média

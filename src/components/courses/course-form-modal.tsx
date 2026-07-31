@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import { LoaderCircle, Save, X } from "lucide-react";
 import { courseKindLabels, courseKinds, coursePriorities, coursePriorityLabels, courseStatuses, courseStatusLabels } from "@/lib/courses/constants";
 import type { Course, CourseInput, CourseListOption } from "@/types/course";
@@ -63,11 +63,6 @@ export function CourseFormModal({
   const [form, setForm] = useState<CourseInput>(() => course ? courseToInput(course) : emptyInput(platforms, areas));
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
-
-  useEffect(() => {
-    setForm(course ? courseToInput(course) : emptyInput(platforms, areas));
-    setNotice(null);
-  }, [course, platforms, areas]);
 
   function update<K extends keyof CourseInput>(key: K, value: CourseInput[K]) {
     setForm((current) => ({ ...current, [key]: value }));

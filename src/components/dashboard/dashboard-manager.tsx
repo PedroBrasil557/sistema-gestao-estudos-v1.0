@@ -94,16 +94,29 @@ export function DashboardManager({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+  const frame = window.requestAnimationFrame(() => {
     if (rememberFilters) {
       try {
         const stored = sessionStorage.getItem(storageKey);
-        if (stored) setFilters({ ...defaultFilters, ...JSON.parse(stored) });
+
+        if (stored) {
+          setFilters({
+            ...defaultFilters,
+            ...JSON.parse(stored),
+          });
+        }
       } catch {
         sessionStorage.removeItem(storageKey);
       }
     }
+
     setHydrated(true);
-  }, [rememberFilters]);
+  });
+
+  return () => {
+    window.cancelAnimationFrame(frame);
+  };
+}, [rememberFilters]);
 
   useEffect(() => {
     if (!hydrated || !rememberFilters) return;

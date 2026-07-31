@@ -98,7 +98,7 @@ function validUrl(value: string | null) {
   }
 }
 
-function normalizeRow(raw: RawCourseImportRow, rowNumber: number): { data: NormalizedCourseImportRow | null; errors: string[]; warnings: string[] } {
+function normalizeRow(raw: RawCourseImportRow): { data: NormalizedCourseImportRow | null; errors: string[]; warnings: string[] } {
   const errors: string[] = [];
   const warnings: string[] = [];
   const name = compactText(raw.name, 160);
@@ -225,7 +225,7 @@ export async function buildCourseImportPreview(
   const normalizedValidRows: NormalizedCourseImportRow[] = [];
 
   rawRows.forEach((raw, index) => {
-    const normalized = normalizeRow(raw, index + 1);
+    const normalized = normalizeRow(raw);
     const data = normalized.data;
     let state: CourseImportPreviewRow["state"] = data ? "READY" : "INVALID";
     let existingCourseId: string | null = null;

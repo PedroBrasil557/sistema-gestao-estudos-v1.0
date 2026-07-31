@@ -86,13 +86,32 @@ export function CertificatesManager({ initialCertificates, courses, annualGoal, 
   const safePage = Math.min(page, pages);
   const visible = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
-  const monthly = useMemo(() => Array.from({ length: 12 }, (_, month) => obtained.filter((certificate) => {
+  const monthly = Array.from({ length: 12 }, (_, month) =>
+  obtained.filter((certificate) => {
     const date = certificate.issueDate ?? certificate.completionDate;
-    if (!date) return false;
-    return date.startsWith(`${trackingYear}-${String(month + 1).padStart(2, "0")}`);
-  }).length), [obtained, trackingYear]);
 
-  const byArea = useMemo(() => Array.from(obtained.reduce((map, certificate) => map.set(certificate.course.area.name, (map.get(certificate.course.area.name) ?? 0) + 1), new Map<string, number>()).entries()).sort((a,b) => b[1]-a[1]).slice(0, 5), [obtained]);
+    if (!date) return false;
+
+    return date.startsWith(
+      `${trackingYear}-${String(month + 1).padStart(2, "0")}`,
+    );
+  }).length,
+);
+
+const byArea = Array.from(
+  obtained
+    .reduce(
+      (map, certificate) =>
+        map.set(
+          certificate.course.area.name,
+          (map.get(certificate.course.area.name) ?? 0) + 1,
+        ),
+      new Map<string, number>(),
+    )
+    .entries(),
+)
+  .sort((a, b) => b[1] - a[1])
+  .slice(0, 5);
 
   function upsert(saved: Certificate) {
     setCertificates((current) => {

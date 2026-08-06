@@ -1,11 +1,21 @@
 export type NoteCategoryOption = {
   id: string;
   name: string;
+  color?: string;
 };
 
 export type NoteCourseOption = {
   id: string;
   name: string;
+  color?: string;
+  group?: "LANGUAGE" | "PROFESSIONAL";
+  icon?: string;
+};
+
+export type ChecklistItem = {
+  id: string;
+  text: string;
+  done: boolean;
 };
 
 export type Note = {
@@ -14,6 +24,9 @@ export type Note = {
   topic: string | null;
   title: string;
   content: string;
+  color: string | null;
+  isDraft: boolean;
+  checklist: ChecklistItem[];
   isImportant: boolean;
   reviewAt: string | null;
   isReviewed: boolean;
@@ -34,6 +47,9 @@ export type NoteInput = {
   title: string;
   categoryId: string;
   content: string;
+  color: string | null;
+  isDraft: boolean;
+  checklist: ChecklistItem[];
   isImportant: boolean;
   reviewAt: string | null;
   isReviewed: boolean;

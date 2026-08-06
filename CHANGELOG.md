@@ -1,4 +1,49 @@
+# Versão 1.1.2 — Correção de qualidade e build
+
+## Correções
+
+- Corrigida a tipagem das consultas das listas configuráveis no Supabase.
+- Removidos espaços dos campos de `.select(...)` que geravam `ParserError` no TypeScript.
+- Corrigida a renderização dinâmica do ícone nos detalhes do curso para atender ao React Compiler.
+- Mantidas integralmente as correções de menu móvel e tela Estudos da v1.1.1.
+- Nenhuma alteração no banco de dados ou nos registros existentes.
+
+# Versão 1.1.1 — Responsividade e fidelidade visual
+
+## Correções
+
+- Corrigido o menu lateral móvel para manter logotipo, nomes das abas, ícones, perfil e saída alinhados.
+- Corrigido o conflito entre o menu recolhido do tablet e o drawer do celular.
+- Drawer móvel agora usa altura dinâmica, bloqueia a rolagem da página e fecha com a tecla Esc.
+- Tela Estudos reorganizada para seguir a imagem aprovada:
+  - resumo Hoje, Semana e Sequência com ícones coloridos;
+  - progresso semanal;
+  - estudos do dia em cartões responsivos;
+  - Idiomas e Profissionalizantes em painéis paralelos;
+  - cartões compactos de cursos com botão Registrar;
+  - estados vazios menores e sem áreas excessivas;
+  - Registros recentes e Consistência alinhados.
+- Ajustes específicos para 375 px, 390 px, 430 px, tablet, notebook e desktop.
+- Nenhuma alteração no banco de dados ou nos registros existentes.
+
 # Changelog
+
+## v1.1.0 — Redesign completo
+
+- Redesenhada toda a interface com base nas imagens aprovadas, preservando a estrutura funcional da v1.0.
+- Criado novo menu lateral azul-marinho, recolhível e responsivo.
+- Padronizados cabeçalhos com data dinâmica, botões, cartões pastel, badges, barras de progresso e estados vazios.
+- Separados os fluxos Registrar estudo e Planejar estudo.
+- Adicionados duração por minutos, atalhos rápidos, horário, habilidade de idioma, recurso, recorrência e lembrete.
+- Reorganizada a aba Estudos para uso diário, com Hoje, Semana, Sequência, planejamentos, cursos em andamento, recentes e consistência.
+- Substituída a tabela principal de Cursos por grid de cartões coloridos e filtros por Idiomas e Profissionalizantes.
+- Simplificado o formulário de curso e reorganizados os detalhes em abas internas.
+- Simplificado o Dashboard para quatro indicadores e cinco análises úteis.
+- Transformada a aba Anotações em mural colorido com checklist e rascunho.
+- Transformada a aba Certificados em grid visual com miniaturas, validade e conquistas recentes.
+- Adicionada personalização de cor principal, menu, botões, cursos, categorias e tonalidade dos cartões.
+- Criada migration aditiva `202608060007_v1_1_redesign.sql`, sem exclusão de dados.
+- Adicionados roteiro de homologação, guia do GitHub Desktop e documentação da release.
 
 ## v1.0.0 — Versão final do MVP
 

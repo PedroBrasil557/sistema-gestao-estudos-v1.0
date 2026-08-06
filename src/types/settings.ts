@@ -18,6 +18,9 @@ export type UserSettings = {
   timeFormat: TimeFormat;
   theme: ThemePreference;
   accentColor: string;
+  sidebarColor: string;
+  buttonColor: string;
+  cardTone: "soft" | "neutral" | "vivid";
   interfaceDensity: InterfaceDensity;
   rounding: RoundingPreference;
   rememberFilters: boolean;
@@ -37,6 +40,7 @@ export type ConfigurableListKind = (typeof configurableListKinds)[number];
 export type ConfigurableListItem = {
   id: string;
   name: string;
+  color?: string;
   isSystem: boolean;
   archivedAt: string | null;
 };

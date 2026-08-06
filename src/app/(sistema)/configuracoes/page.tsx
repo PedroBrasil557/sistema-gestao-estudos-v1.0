@@ -30,7 +30,7 @@ export default async function ConfiguracoesPage() {
       supabase.from("platforms").select("id, name, is_system, archived_at").eq("user_id", userId).order("name"),
       supabase.from("areas").select("id, name, is_system, archived_at").eq("user_id", userId).order("name"),
       supabase.from("study_types").select("id, name, is_system, archived_at").eq("user_id", userId).order("name"),
-      supabase.from("note_categories").select("id, name, is_system, archived_at").eq("user_id", userId).order("name"),
+      supabase.from("note_categories").select("id, name, color, is_system, archived_at").eq("user_id", userId).order("name"),
     ]);
 
     databaseReady = !settingsResult.error && !platformsResult.error && !areasResult.error && !studyTypesResult.error && !noteCategoriesResult.error;

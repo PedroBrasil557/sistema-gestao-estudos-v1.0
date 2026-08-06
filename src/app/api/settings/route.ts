@@ -20,9 +20,10 @@ function validateSettings(input: Partial<UserSettings>): string | null {
   if (input.consistencyDays !== undefined && (!Number.isInteger(input.consistencyDays) || input.consistencyDays < 7 || input.consistencyDays > 365)) {
     return "O calendário de consistência deve ter entre 7 e 365 dias.";
   }
-  if (input.accentColor !== undefined && !isHexColor(input.accentColor)) {
-    return "A cor principal deve estar no formato hexadecimal.";
+  for (const [label, value] of [["cor principal", input.accentColor], ["cor do menu", input.sidebarColor], ["cor dos botões", input.buttonColor]] as const) {
+    if (value !== undefined && !isHexColor(value)) return `A ${label} deve estar no formato hexadecimal.`;
   }
+  if (input.cardTone !== undefined && !["soft", "neutral", "vivid"].includes(input.cardTone)) return "Selecione uma tonalidade de cartões válida.";
   return null;
 }
 

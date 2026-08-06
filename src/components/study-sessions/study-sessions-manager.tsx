@@ -1,90 +1,72 @@
 "use client";
 
+import Link from "next/link";
+import type { CSSProperties } from "react";
 import { useMemo, useState } from "react";
 import {
   BookOpen,
-  CalendarCheck2,
+  CalendarDays,
+  Check,
   CheckCircle2,
+  ChevronRight,
   Clock3,
-  Copy,
-  FilterX,
+  Edit3,
   Flame,
   GraduationCap,
-  Layers3,
+  Languages,
   LoaderCircle,
-  Pencil,
-  Play,
+  MoreHorizontal,
   Plus,
   RotateCcw,
   Search,
-  Target,
   Trash2,
-  TrendingUp,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
-import { Badge, HorizontalBars, MetricCard, Panel, ProgressBar } from "@/components/ui";
+import { Badge, EmptyState, ProgressBar } from "@/components/ui";
 import { StudySessionFormModal } from "@/components/study-sessions/study-session-form-modal";
-import {
-  areaTotals,
-  consistencyDays as buildConsistencyDays,
-  courseProgress,
-  currentStreak,
-  dateInTimeZone,
-  formatShortDate,
-  generalProgress,
-  weeklyTotals,
-} from "@/lib/study-sessions/analytics";
-import { sessionStatuses, sessionStatusLabels, sessionStatusTones } from "@/lib/study-sessions/constants";
+import { buildMonthGrid, currentStreak, dateInTimeZone } from "@/lib/study-sessions/analytics";
+import { sessionStatusLabels } from "@/lib/study-sessions/constants";
+import { courseIcon, normalizeHex, pastelColor } from "@/lib/visuals";
 import type { StudyCourseOption, StudySession, StudySessionInput, StudyTypeOption } from "@/types/study-session";
 
 type Notice = { type: "success" | "error"; text: string } | null;
-type DeletedFilter = "active" | "deleted" | "all";
-type Sort = "date-desc" | "date-asc" | "course" | "studied-desc" | "planned-desc";
+type ModalState = { open: boolean; mode: "register" | "plan"; session: StudySession | null; seed: Partial<StudySessionInput> | null };
 
-function formatDate(value: string) {
-  const [year, month, day] = value.slice(0, 10).split("-");
-  return `${day}/${month}/${year}`;
+function formatDate(value: string) { const [year, month, day] = value.slice(0, 10).split("-"); return `${day}/${month}/${year}`; }
+function formatHours(value: number | null) { const minutes = Math.round(Math.max(0, value ?? 0) * 60); const hours = Math.floor(minutes / 60); const rest = minutes % 60; return hours ? (rest ? `${hours}h ${rest}min` : `${hours}h`) : `${rest}min`; }
+function formatTime(value: string | null) { return value ? value.slice(0, 5) : "Horário livre"; }
+
+function mondayOf(date: string) {
+  const base = new Date(`${date}T12:00:00Z`);
+  const day = (base.getUTCDay() + 6) % 7;
+  base.setUTCDate(base.getUTCDate() - day);
+  return base.toISOString().slice(0, 10);
 }
 
-function formatHours(value: number | null) {
-  if (value === null) return "—";
-  const totalMinutes = Math.round(Math.max(0, value) * 60);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours === 0) return `${minutes}min`;
-  if (minutes === 0) return `${hours}h`;
-  return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+function shiftDate(date: string, days: number) {
+  const base = new Date(`${date}T12:00:00Z`);
+  base.setUTCDate(base.getUTCDate() + days);
+  return base.toISOString().slice(0, 10);
 }
 
-function priorityRank(value: StudySession["course"]["priority"] | StudyCourseOption["priority"]) {
-  return value === "HIGH" ? 0 : value === "MEDIUM" ? 1 : 2;
-}
-
-function statusRank(value: StudySession["status"]) {
-  if (value === "IN_PROGRESS") return 0;
-  if (value === "PLANNED") return 1;
-  if (value === "PAUSED") return 2;
-  if (value === "COMPLETED") return 3;
-  return 4;
-}
-
-function courseStatusLabel(value: StudyCourseOption["status"]) {
-  return ({
-    PLANNED: "Planejado",
-    NOT_STARTED: "Não iniciado",
-    IN_PROGRESS: "Em andamento",
-    PAUSED: "Pausado",
-    COMPLETED: "Concluído",
-    CANCELLED: "Cancelado",
-  } as const)[value];
-}
-
-function courseStatusTone(value: StudyCourseOption["status"]): "blue" | "green" | "orange" | "gray" | "red" {
-  if (value === "COMPLETED") return "green";
-  if (value === "IN_PROGRESS") return "blue";
-  if (value === "PAUSED" || value === "PLANNED") return "orange";
-  if (value === "CANCELLED") return "red";
-  return "gray";
+function payloadFrom(session: StudySession, overrides: Partial<StudySessionInput> = {}): StudySessionInput {
+  return {
+    studyDate: session.studyDate,
+    scheduledTime: session.scheduledTime,
+    courseId: session.course.id,
+    topic: session.topic,
+    plannedHours: session.plannedHours,
+    studiedHours: session.studiedHours,
+    status: session.status,
+    languageSkill: session.languageSkill,
+    studyTypeId: session.studyType.id,
+    resource: session.resource,
+    recurrenceRule: session.recurrenceRule,
+    reminderAt: session.reminderAt,
+    notes: session.notes,
+    ...overrides,
+  };
 }
 
 export function StudySessionsManager({
@@ -93,11 +75,12 @@ export function StudySessionsManager({
   studyTypes,
   databaseReady,
   monthlyGoalHours,
-  currentCourseId: initialCurrentCourseId,
+  currentCourseId,
   defaultCourseId,
   timezone,
   consistencyDays,
   initialOpen,
+  initialMode = "register",
 }: {
   initialSessions: StudySession[];
   courses: StudyCourseOption[];
@@ -109,302 +92,217 @@ export function StudySessionsManager({
   timezone: string;
   consistencyDays: number;
   initialOpen: boolean;
+  initialMode?: "register" | "plan";
 }) {
   const [sessions, setSessions] = useState(initialSessions);
   const [notice, setNotice] = useState<Notice>(null);
-  const [modalOpen, setModalOpen] = useState(Boolean(initialOpen && databaseReady));
-  const [editing, setEditing] = useState<StudySession | null>(null);
-  const [seed, setSeed] = useState<Partial<StudySessionInput> | null>(null);
+  const [modal, setModal] = useState<ModalState>({ open: Boolean(initialOpen && databaseReady), mode: initialMode, session: null, seed: initialMode === "plan" ? { status: "PLANNED" } : null });
   const [loadingId, setLoadingId] = useState<string | null>(null);
-  const [currentCourseId, setCurrentCourseId] = useState(initialCurrentCourseId ?? "");
-  const [savingCurrentCourse, setSavingCurrentCourse] = useState(false);
-  const [selectedConsistencyDate, setSelectedConsistencyDate] = useState<string | null>(null);
+  const [recordsOpen, setRecordsOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [courseId, setCourseId] = useState("");
-  const [status, setStatus] = useState("");
-  const [studyTypeId, setStudyTypeId] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [deletedFilter, setDeletedFilter] = useState<DeletedFilter>("active");
-  const [sort, setSort] = useState<Sort>("date-desc");
-  const [page, setPage] = useState(1);
-  const pageSize = 10;
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const today = useMemo(() => dateInTimeZone(timezone), [timezone]);
-  const currentMonth = today.slice(0, 7);
-
+  const weekStart = useMemo(() => mondayOf(today), [today]);
   const activeSessions = useMemo(() => sessions.filter((session) => !session.deletedAt), [sessions]);
-  const studyHoursByCourse = useMemo(() => {
-    const totals = new Map<string, number>();
-    for (const session of activeSessions) totals.set(session.course.id, (totals.get(session.course.id) ?? 0) + session.studiedHours);
-    return totals;
-  }, [activeSessions]);
 
   const summary = useMemo(() => {
-    const totalHours = activeSessions.reduce((sum, session) => sum + session.studiedHours, 0);
-    const monthHours = activeSessions.filter((session) => session.studyDate.startsWith(currentMonth)).reduce((sum, session) => sum + session.studiedHours, 0);
-    const activeCourses = courses.filter((course) => course.status === "IN_PROGRESS" && !course.archivedAt).length;
-    const completedCourses = courses.filter((course) => course.status === "COMPLETED" && !course.archivedAt).length;
-    const streak = currentStreak(activeSessions, today);
+    const todaySessions = activeSessions.filter((session) => session.studyDate === today && session.status !== "CANCELLED");
+    const weekSessions = activeSessions.filter((session) => session.studyDate >= weekStart && session.studyDate <= today && session.status !== "CANCELLED");
     return {
-      totalHours,
-      monthHours,
-      activeCourses,
-      completedCourses,
-      streak,
-      progress: generalProgress(courses, activeSessions),
+      todayPlanned: todaySessions.reduce((sum, session) => sum + (session.plannedHours ?? 0), 0),
+      todayStudied: todaySessions.reduce((sum, session) => sum + session.studiedHours, 0),
+      weekPlanned: weekSessions.reduce((sum, session) => sum + (session.plannedHours ?? 0), 0),
+      weekStudied: weekSessions.reduce((sum, session) => sum + session.studiedHours, 0),
+      streak: currentStreak(activeSessions, today).days,
     };
-  }, [activeSessions, courses, currentMonth, today]);
-
-  const monthPercent = monthlyGoalHours > 0 ? Math.round((summary.monthHours / monthlyGoalHours) * 100) : 0;
-
-  const currentCourse = useMemo(() => courses.find((course) => course.id === currentCourseId) ?? null, [courses, currentCourseId]);
-  const currentCourseHours = currentCourse ? (studyHoursByCourse.get(currentCourse.id) ?? 0) : 0;
-  const currentCourseProgress = currentCourse ? courseProgress(currentCourse, currentCourseHours) : 0;
+  }, [activeSessions, today, weekStart]);
 
   const focusToday = useMemo(() => activeSessions
     .filter((session) => session.studyDate === today && session.status !== "CANCELLED")
-    .sort((a, b) => priorityRank(a.course.priority) - priorityRank(b.course.priority) || statusRank(a.status) - statusRank(b.status) || a.createdAt.localeCompare(b.createdAt)), [activeSessions, today]);
+    .sort((a, b) => (a.scheduledTime ?? "99:99").localeCompare(b.scheduledTime ?? "99:99") || a.createdAt.localeCompare(b.createdAt)), [activeSessions, today]);
 
-  const recentSessions = useMemo(() => [...activeSessions]
-    .filter((session) => session.studiedHours > 0)
-    .sort((a, b) => b.studyDate.localeCompare(a.studyDate) || b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, 5), [activeSessions]);
+  const inProgressCourses = useMemo(() => courses.filter((course) => course.status === "IN_PROGRESS" && !course.archivedAt), [courses]);
+  const languageCourses = inProgressCourses.filter((course) => course.group === "LANGUAGE");
+  const professionalCourses = inProgressCourses.filter((course) => course.group === "PROFESSIONAL");
+  const recentSessions = useMemo(() => activeSessions.filter((session) => session.studiedHours > 0).sort((a, b) => b.studyDate.localeCompare(a.studyDate) || b.updatedAt.localeCompare(a.updatedAt)).slice(0, 6), [activeSessions]);
 
-  const areaRows = useMemo(() => areaTotals(activeSessions).slice(0, 8).map(([label, value]) => ({ label, value, text: formatHours(value) })), [activeSessions]);
-  const weeks = useMemo(() => weeklyTotals(activeSessions, today, 8), [activeSessions, today]);
-  const maxWeekHours = Math.max(...weeks.map((week) => week.hours), 1);
-  const consistency = useMemo(() => buildConsistencyDays(activeSessions, today, consistencyDays), [activeSessions, today, consistencyDays]);
-  const selectedDaySessions = useMemo(() => selectedConsistencyDate ? activeSessions.filter((session) => session.studyDate === selectedConsistencyDate) : [], [activeSessions, selectedConsistencyDate]);
+  const monthDays = useMemo(() => buildMonthGrid(activeSessions, today), [activeSessions, today]);
+  const studiedDaysThisMonth = monthDays.filter((day) => day.inMonth && day.hours > 0).length;
+  const consistencyStart = useMemo(() => shiftDate(today, -(Math.max(1, consistencyDays) - 1)), [today, consistencyDays]);
+  const recentConsistencyDays = useMemo(() => new Set(activeSessions.filter((session) => session.studyDate >= consistencyStart && session.studyDate <= today && session.studiedHours > 0).map((session) => session.studyDate)).size, [activeSessions, consistencyStart, today]);
+  const monthName = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: timezone }).format(new Date(`${today}T12:00:00Z`));
 
-  const filtered = useMemo(() => {
-    const normalizedSearch = search.trim().toLocaleLowerCase("pt-BR");
-    const result = sessions.filter((session) => {
-      if (deletedFilter === "active" && session.deletedAt) return false;
-      if (deletedFilter === "deleted" && !session.deletedAt) return false;
-      if (courseId && session.course.id !== courseId) return false;
-      if (status && session.status !== status) return false;
-      if (studyTypeId && session.studyType.id !== studyTypeId) return false;
-      if (dateFrom && session.studyDate < dateFrom) return false;
-      if (dateTo && session.studyDate > dateTo) return false;
-      if (normalizedSearch && ![session.course.name, session.topic, session.notes ?? "", session.studyType.name].join(" ").toLocaleLowerCase("pt-BR").includes(normalizedSearch)) return false;
-      return true;
+  const filteredRecords = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase("pt-BR");
+    return [...sessions].filter((session) => !term || [session.course.name, session.topic, session.notes ?? "", session.studyType.name].join(" ").toLocaleLowerCase("pt-BR").includes(term)).sort((a, b) => b.studyDate.localeCompare(a.studyDate) || b.updatedAt.localeCompare(a.updatedAt));
+  }, [sessions, search]);
+
+  function openRegister(courseId?: string, session?: StudySession) {
+    setModal({ open: true, mode: "register", session: session ?? null, seed: courseId ? { courseId } : null });
+    setOpenMenuId(null);
+  }
+  function openPlan(courseId?: string, session?: StudySession) {
+    setModal({ open: true, mode: "plan", session: session ?? null, seed: courseId ? { courseId, status: "PLANNED" } : null });
+    setOpenMenuId(null);
+  }
+  function replan(session: StudySession) {
+    setModal({
+      open: true,
+      mode: "plan",
+      session: null,
+      seed: {
+        studyDate: session.studyDate,
+        scheduledTime: session.scheduledTime,
+        courseId: session.course.id,
+        topic: session.topic,
+        plannedHours: session.plannedHours ?? (session.studiedHours || 0.5),
+        studyTypeId: session.studyType.id,
+        languageSkill: session.languageSkill,
+        resource: session.resource,
+        notes: session.notes,
+        status: "PLANNED",
+      },
     });
-
-    return result.sort((a, b) => {
-      if (sort === "date-asc") return a.studyDate.localeCompare(b.studyDate) || a.createdAt.localeCompare(b.createdAt);
-      if (sort === "course") return a.course.name.localeCompare(b.course.name, "pt-BR") || b.studyDate.localeCompare(a.studyDate);
-      if (sort === "studied-desc") return b.studiedHours - a.studiedHours || b.studyDate.localeCompare(a.studyDate);
-      if (sort === "planned-desc") return (b.plannedHours ?? 0) - (a.plannedHours ?? 0) || b.studyDate.localeCompare(a.studyDate);
-      return b.studyDate.localeCompare(a.studyDate) || b.updatedAt.localeCompare(a.updatedAt);
-    });
-  }, [sessions, deletedFilter, courseId, status, studyTypeId, dateFrom, dateTo, search, sort]);
-
-  const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const safePage = Math.min(page, pages);
-  const visibleSessions = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
-
-  function resetPage() { setPage(1); }
-  function openCreate() { setEditing(null); setSeed(null); setModalOpen(true); }
-  function openEdit(session: StudySession) { setEditing(session); setSeed(null); setModalOpen(true); }
-  function openDuplicate(session: StudySession) {
-    setEditing(null);
-    setSeed({
-      studyDate: today,
-      courseId: session.course.id,
-      topic: session.topic,
-      plannedHours: session.plannedHours,
-      studiedHours: 0,
-      status: "PLANNED",
-      studyTypeId: session.studyType.id,
-      notes: session.notes,
-    });
-    setModalOpen(true);
+    setOpenMenuId(null);
+  }
+  function saved(savedSession: StudySession, message: string) {
+    setSessions((current) => current.some((item) => item.id === savedSession.id) ? current.map((item) => item.id === savedSession.id ? savedSession : item) : [savedSession, ...current]);
+    setNotice({ type: "success", text: message });
+    setModal({ open: false, mode: "register", session: null, seed: null });
   }
 
-  function saved(savedSession: StudySession, message: string) {
-    setSessions((current) => editing ? current.map((item) => item.id === savedSession.id ? savedSession : item) : [savedSession, ...current]);
-    setNotice({ type: "success", text: message });
-    setModalOpen(false);
-    setEditing(null);
-    setSeed(null);
-    setPage(1);
+  async function quickComplete(session: StudySession) {
+    setLoadingId(session.id);
+    const response = await fetch(`/api/study-sessions/${session.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payloadFrom(session, { status: "COMPLETED", studiedHours: session.studiedHours > 0 ? session.studiedHours : session.plannedHours ?? 0.5 })) });
+    const result = await response.json().catch(() => ({})) as { message?: string; session?: StudySession };
+    setLoadingId(null);
+    if (!response.ok || !result.session) { setNotice({ type: "error", text: result.message ?? "Não foi possível concluir o estudo." }); return; }
+    setSessions((current) => current.map((item) => item.id === session.id ? result.session! : item));
+    setNotice({ type: "success", text: "Estudo concluído e métricas atualizadas." });
   }
 
   async function remove(session: StudySession) {
-    if (!window.confirm(`Excluir a sessão “${session.topic}” de ${formatDate(session.studyDate)}? Ela poderá ser restaurada pela lixeira.`)) return;
-    setLoadingId(session.id);
+    if (!window.confirm(`Mover “${session.topic}” para a lixeira?`)) return;
+    setLoadingId(session.id); setOpenMenuId(null);
     const response = await fetch(`/api/study-sessions/${session.id}`, { method: "DELETE" });
-    const payload = await response.json().catch(() => ({})) as { message?: string; session?: StudySession };
+    const result = await response.json().catch(() => ({})) as { message?: string; session?: StudySession };
     setLoadingId(null);
-    if (!response.ok || !payload.session) { setNotice({ type: "error", text: payload.message ?? "Não foi possível excluir a sessão." }); return; }
-    setSessions((current) => current.map((item) => item.id === session.id ? payload.session! : item));
-    setNotice({ type: "success", text: payload.message ?? "Sessão movida para a lixeira." });
+    if (!response.ok || !result.session) { setNotice({ type: "error", text: result.message ?? "Não foi possível excluir." }); return; }
+    setSessions((current) => current.map((item) => item.id === session.id ? result.session! : item));
+    setNotice({ type: "success", text: result.message ?? "Registro movido para a lixeira." });
   }
 
   async function restore(session: StudySession) {
     setLoadingId(session.id);
     const response = await fetch(`/api/study-sessions/${session.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ restore: true }) });
-    const payload = await response.json().catch(() => ({})) as { message?: string; session?: StudySession };
+    const result = await response.json().catch(() => ({})) as { message?: string; session?: StudySession };
     setLoadingId(null);
-    if (!response.ok || !payload.session) { setNotice({ type: "error", text: payload.message ?? "Não foi possível restaurar a sessão." }); return; }
-    setSessions((current) => current.map((item) => item.id === session.id ? payload.session! : item));
-    setNotice({ type: "success", text: payload.message ?? "Sessão restaurada." });
+    if (!response.ok || !result.session) { setNotice({ type: "error", text: result.message ?? "Não foi possível restaurar." }); return; }
+    setSessions((current) => current.map((item) => item.id === session.id ? result.session! : item));
+    setNotice({ type: "success", text: result.message ?? "Registro restaurado." });
   }
 
-  async function quickStatus(session: StudySession, nextStatus: StudySession["status"]) {
-    if (nextStatus === "COMPLETED" && session.studiedHours <= 0) {
-      setNotice({ type: "error", text: "Informe as horas estudadas antes de concluir esta sessão." });
-      openEdit(session);
-      return;
+  function courseProgress(course: StudyCourseOption) {
+    if (course.status === "COMPLETED") return 100;
+    if (course.group === "LANGUAGE" && course.weeklyGoalMinutes > 0) {
+      const weekMinutes = activeSessions.filter((session) => session.course.id === course.id && session.studyDate >= weekStart && session.studyDate <= today).reduce((sum, session) => sum + session.studiedHours * 60, 0);
+      return Math.min(100, Math.round((weekMinutes / course.weeklyGoalMinutes) * 100));
     }
-    setLoadingId(session.id);
-    const response = await fetch(`/api/study-sessions/${session.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        studyDate: session.studyDate,
-        courseId: session.course.id,
-        topic: session.topic,
-        plannedHours: session.plannedHours,
-        studiedHours: session.studiedHours,
-        status: nextStatus,
-        studyTypeId: session.studyType.id,
-        notes: session.notes,
-      } satisfies StudySessionInput),
-    });
-    const payload = await response.json().catch(() => ({})) as { message?: string; session?: StudySession };
-    setLoadingId(null);
-    if (!response.ok || !payload.session) {
-      setNotice({ type: "error", text: payload.message ?? "Não foi possível atualizar a sessão." });
-      return;
-    }
-    setSessions((current) => current.map((item) => item.id === session.id ? payload.session! : item));
-    setNotice({ type: "success", text: nextStatus === "COMPLETED" ? "Sessão concluída." : "Sessão iniciada." });
+    return course.workloadHours > 0 ? Math.min(100, Math.round((course.studiedHours / course.workloadHours) * 100)) : 0;
   }
 
-  async function changeCurrentCourse(value: string) {
-    const previous = currentCourseId;
-    setCurrentCourseId(value);
-    setSavingCurrentCourse(true);
-    const response = await fetch("/api/settings", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ currentCourseId: value || null }),
-    });
-    const payload = await response.json().catch(() => ({})) as { message?: string };
-    setSavingCurrentCourse(false);
-    if (!response.ok) {
-      setNotice({ type: "error", text: payload.message ?? "Não foi possível salvar o curso atual." });
-      setCurrentCourseId(previous);
-      return;
-    }
-    setNotice({ type: "success", text: value ? "Curso atual salvo nas suas preferências." : "Curso atual removido das preferências." });
-  }
-
-  function clearFilters() {
-    setSearch(""); setCourseId(""); setStatus(""); setStudyTypeId(""); setDateFrom(""); setDateTo(""); setDeletedFilter("active"); setSort("date-desc"); setPage(1);
+  function renderCourseGroup(title: string, items: StudyCourseOption[], Icon: LucideIcon) {
+    return (
+      <section className="study-course-group card">
+        <div className="study-course-group-header">
+          <div><Icon size={19} /><h3>{title}</h3></div>
+          <Link href="/cursos">Ver todos <ChevronRight size={14} /></Link>
+        </div>
+        {items.length ? (
+          <div className="compact-course-grid">
+            {items.slice(0, 4).map((course) => {
+              const CourseIcon = courseIcon(course.icon || course.name);
+              const color = normalizeHex(course.color);
+              const style = { "--course-color": color, "--course-pastel": pastelColor(color) } as CSSProperties;
+              const progress = courseProgress(course);
+              return (
+                <article className="compact-course-card" style={style} key={course.id}>
+                  <div className="compact-course-card-top">
+                    <div className="compact-course-icon"><CourseIcon size={23} /></div>
+                    <div className="compact-course-copy">
+                      <strong>{course.name}</strong>
+                      <span>{course.group === "LANGUAGE" && course.weeklyGoalMinutes ? `Meta semanal ${formatHours(course.weeklyGoalMinutes / 60)}` : `${progress}% concluído`}</span>
+                    </div>
+                  </div>
+                  <ProgressBar value={progress} color={color} />
+                  <button className="compact-register-button" type="button" onClick={() => openRegister(course.id)}>
+                    <Edit3 size={14} /> Registrar
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <EmptyState compact title={`Nenhum ${title.toLocaleLowerCase("pt-BR")} em andamento`} description="Altere o status de um curso para começar a acompanhá-lo aqui." />
+        )}
+      </section>
+    );
   }
 
   return (
     <>
-      <PageHeader
-        title="Estudos"
-        subtitle="Seu painel diário agora usa os registros reais para calcular progresso, foco e consistência."
-        actions={<button className="header-button" type="button" onClick={openCreate} disabled={!databaseReady}><Plus size={17} /><span className="button-label">Registrar estudo</span></button>}
-      />
-
-      <div className="content">
-        {!databaseReady && <div className="settings-notice error" role="alert">Os dados de Estudos não puderam ser carregados. Confirme as migrações das versões 0.4 a 0.7 no Supabase.</div>}
+      <PageHeader title="Estudos" subtitle="Acompanhe seus estudos, mantenha a consistência e alcance seus objetivos." timezone={timezone} actions={<div className="page-actions"><button className="primary-button" type="button" onClick={() => openRegister(defaultCourseId ?? currentCourseId ?? undefined)} disabled={!databaseReady}><Plus size={17} /> Registrar estudo</button><button className="secondary-button" type="button" onClick={() => openPlan(defaultCourseId ?? currentCourseId ?? undefined)} disabled={!databaseReady}><CalendarDays size={17} /> Planejar estudo</button></div>} />
+      <div className="content redesign-content studies-redesign">
         {notice && <div className={`settings-notice ${notice.type}`} role="status">{notice.text}</div>}
 
-        <section className="metrics-grid" aria-label="Resumo principal dos estudos">
-          <MetricCard label="Cursos ativos" value={String(summary.activeCourses)} helper="com status Em andamento" icon={BookOpen} tone="blue" />
-          <MetricCard label="Horas estudadas" value={formatHours(summary.totalHours)} helper="total registrado" icon={Clock3} tone="cyan" />
-          <MetricCard label="Meta do mês" value={`${monthPercent}%`} helper={`${formatHours(summary.monthHours)} de ${formatHours(monthlyGoalHours)}`} progress={monthPercent} icon={Target} tone="orange" />
-          <MetricCard label="Sequência" value={`${summary.streak.days} dia${summary.streak.days === 1 ? "" : "s"}`} helper={summary.streak.atRisk ? "estude hoje para manter" : summary.streak.days ? "sequência ativa" : "comece hoje"} icon={Flame} tone="red" />
-          <MetricCard label="Concluídos" value={String(summary.completedCourses)} helper="cursos concluídos" icon={GraduationCap} tone="green" />
-          <MetricCard label="Progresso geral" value={`${Math.round(summary.progress)}%`} helper="ponderado pela carga horária" progress={summary.progress} icon={TrendingUp} tone="purple" />
+        <section className="daily-summary card">
+          <div className="daily-summary-item today">
+            <span className="daily-summary-icon"><Clock3 size={22} /></span>
+            <div><span>Hoje</span><strong>{formatHours(summary.todayStudied)}</strong><small>{formatHours(summary.todayPlanned)} planejadas</small></div>
+          </div>
+          <div className="daily-summary-item week">
+            <span className="daily-summary-icon"><CalendarDays size={22} /></span>
+            <div className="daily-summary-week-copy">
+              <span>Semana</span>
+              <strong>{formatHours(summary.weekStudied)}</strong>
+              <small>de {formatHours(summary.weekPlanned || monthlyGoalHours / 4)} planejadas</small>
+            </div>
+            <div className="daily-summary-progress" aria-label="Progresso da meta semanal">
+              <span style={{ width: `${Math.min(100, Math.round((summary.weekStudied / Math.max(summary.weekPlanned || monthlyGoalHours / 4, 0.01)) * 100))}%` }} />
+            </div>
+          </div>
+          <div className="daily-summary-item streak">
+            <span className="daily-summary-icon"><Flame size={22} /></span>
+            <div><span>Sequência</span><strong>{summary.streak} dias</strong><small>{summary.streak ? "Continue assim!" : "Comece hoje"}</small></div>
+          </div>
         </section>
 
-        <div className="dashboard-grid">
-          <Panel title="Curso atual" className="span-5" action={savingCurrentCourse ? <span className="panel-saving"><LoaderCircle className="spin" size={14} /> Salvando</span> : undefined}>
-            <div className="current-course-selector">
-              <label htmlFor="current-course">Curso acompanhado no painel</label>
-              <select id="current-course" className="form-control" value={currentCourseId} onChange={(event) => changeCurrentCourse(event.target.value)} disabled={!databaseReady || savingCurrentCourse}>
-                <option value="">Selecione um curso</option>
-                {courses.filter((course) => course.status !== "CANCELLED").map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}
-              </select>
-            </div>
-            {currentCourse ? <div className="current-course-card">
-              <div className="current-course-heading"><div><span className="eyebrow">{currentCourse.platform.name}</span><h3>{currentCourse.name}</h3><p>{currentCourse.area.name}</p></div><Badge tone={courseStatusTone(currentCourse.status)}>{courseStatusLabel(currentCourse.status)}</Badge></div>
-              <div className="course-progress-summary"><div><strong>{Math.round(currentCourseProgress)}%</strong><span>progresso</span></div><div><strong>{formatHours(currentCourseHours)}</strong><span>estudadas</span></div><div><strong>{formatHours(Math.max(currentCourse.workloadHours - currentCourseHours, 0))}</strong><span>restantes</span></div></div>
-              <ProgressBar value={currentCourseProgress} tone="blue" />
-              <div className="current-course-footer"><span>Carga: {formatHours(currentCourse.workloadHours)}</span><span>{currentCourse.targetCompletionDate ? `Meta: ${formatDate(currentCourse.targetCompletionDate)}` : "Sem meta de conclusão"}</span></div>
-            </div> : <div className="panel-empty current-course-empty">Escolha um curso para acompanhar seu progresso diretamente nesta tela.</div>}
-          </Panel>
+        <section className="today-section">
+          <div className="section-heading"><div><CalendarDays size={20} /><h2>Hoje</h2><Badge tone="blue">{focusToday.length} {focusToday.length === 1 ? "estudo" : "estudos"}</Badge></div><button className="link-button" type="button" onClick={() => openPlan()}>+ Planejar</button></div>
+          {focusToday.length ? <div className="today-study-list">{focusToday.map((session) => { const color = normalizeHex(session.course.color); const Icon = courseIcon(session.course.icon || session.course.name); const style = { "--course-color": color, "--course-pastel": pastelColor(color) } as CSSProperties; return <article className="today-study-card" style={style} key={session.id}><div className="today-study-time"><strong>{formatTime(session.scheduledTime)}</strong><span>{formatHours(session.plannedHours ?? session.studiedHours)}</span></div><div className="today-study-icon"><Icon size={24} /></div><div className="today-study-copy"><strong>{session.course.name}</strong><span>{session.topic}</span>{session.languageSkill && <small>{session.languageSkill}</small>}</div><div className="today-study-actions">{session.status !== "COMPLETED" ? <button className="complete-button" type="button" onClick={() => quickComplete(session)} disabled={loadingId === session.id}>{loadingId === session.id ? <LoaderCircle className="spin" size={16} /> : <Check size={16} />} Concluir</button> : <Badge tone="green">Concluído</Badge>}<button className="secondary-button compact-button" type="button" onClick={() => replan(session)}>Reagendar</button><div className="action-menu-wrap"><button className="icon-action" type="button" onClick={() => setOpenMenuId((value) => value === session.id ? null : session.id)} aria-label="Mais ações"><MoreHorizontal size={18} /></button>{openMenuId === session.id && <div className="action-menu"><button type="button" onClick={() => session.status === "PLANNED" ? openPlan(undefined, session) : openRegister(undefined, session)}><Edit3 size={14} /> Editar</button><button type="button" className="danger" onClick={() => remove(session)}><Trash2 size={14} /> Excluir</button></div>}</div></div></article>; })}</div> : <EmptyState title="Nada planejado para hoje" description="Planeje um estudo ou registre diretamente o que você já fez." action={<div className="empty-actions"><button className="primary-button" type="button" onClick={() => openPlan()}><CalendarDays size={16} /> Planejar hoje</button><button className="secondary-button" type="button" onClick={() => openRegister()}><Plus size={16} /> Registrar agora</button></div>} />}
+        </section>
 
-          <Panel title="Foco de hoje" className="span-7" action={<button type="button" className="secondary-button compact-button" onClick={openCreate}><Plus size={14} /> Planejar</button>}>
-            {focusToday.length ? <div className="focus-list">{focusToday.map((session) => <article className="focus-item" key={session.id}>
-              <div className="focus-icon"><CalendarCheck2 size={17} /></div>
-              <div className="focus-main"><div className="focus-title-row"><strong>{session.course.name}</strong><Badge tone={sessionStatusTones[session.status]}>{sessionStatusLabels[session.status]}</Badge></div><span>{session.topic}</span><small>{session.studyType.name} • Planejado: {formatHours(session.plannedHours)} • Realizado: {formatHours(session.studiedHours)}</small></div>
-              <div className="focus-actions">{session.status === "PLANNED" && <button type="button" className="table-icon-button" title="Iniciar" onClick={() => quickStatus(session, "IN_PROGRESS")} disabled={loadingId === session.id}>{loadingId === session.id ? <LoaderCircle className="spin" size={15} /> : <Play size={15} />}</button>}{session.status !== "COMPLETED" && <button type="button" className="table-icon-button success-icon" title="Concluir" onClick={() => quickStatus(session, "COMPLETED")} disabled={loadingId === session.id}><CheckCircle2 size={15} /></button>}<button type="button" className="table-icon-button" title="Editar" onClick={() => openEdit(session)}><Pencil size={15} /></button></div>
-            </article>)}</div> : <div className="focus-empty"><CalendarCheck2 size={30} /><strong>Nenhum estudo planejado para hoje.</strong><span>Crie uma sessão para organizar seu foco do dia.</span><button className="primary-button" type="button" onClick={openCreate}><Plus size={15} /> Planejar estudo de hoje</button></div>}
-          </Panel>
+        <section className="in-progress-section">
+          <div className="section-heading">
+            <div><BookOpen size={20} /><h2>Em andamento</h2></div>
+            <Link href="/cursos">Gerenciar cursos <ChevronRight size={15} /></Link>
+          </div>
+          <div className="study-course-groups-grid">
+            {renderCourseGroup("Idiomas", languageCourses, Languages)}
+            {renderCourseGroup("Profissionalizantes", professionalCourses, GraduationCap)}
+          </div>
+        </section>
 
-          <Panel title="Registro de Estudos" className="span-12" action={<button className="secondary-button compact-button" type="button" onClick={clearFilters}><FilterX size={14} /> Limpar filtros</button>}>
-            <div className="toolbar study-toolbar">
-              <div className="search-box"><Search size={16} /><input value={search} onChange={(event) => { setSearch(event.target.value); resetPage(); }} placeholder="Buscar curso, assunto, tipo ou observação" aria-label="Buscar sessões" /></div>
-              <select className="filter-select" value={courseId} onChange={(event) => { setCourseId(event.target.value); resetPage(); }} aria-label="Filtrar por curso"><option value="">Todos os cursos</option>{courses.map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}</select>
-              <select className="filter-select" value={status} onChange={(event) => { setStatus(event.target.value); resetPage(); }} aria-label="Filtrar por status"><option value="">Todos os status</option>{sessionStatuses.map((item) => <option key={item} value={item}>{sessionStatusLabels[item]}</option>)}</select>
-              <select className="filter-select" value={studyTypeId} onChange={(event) => { setStudyTypeId(event.target.value); resetPage(); }} aria-label="Filtrar por tipo"><option value="">Todos os tipos</option>{studyTypes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-              <input className="filter-select date-filter" type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); resetPage(); }} aria-label="Data inicial" />
-              <input className="filter-select date-filter" type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); resetPage(); }} aria-label="Data final" />
-              <select className="filter-select" value={deletedFilter} onChange={(event) => { setDeletedFilter(event.target.value as DeletedFilter); resetPage(); }} aria-label="Filtrar lixeira"><option value="active">Somente ativas</option><option value="deleted">Lixeira</option><option value="all">Ativas e excluídas</option></select>
-              <select className="filter-select" value={sort} onChange={(event) => setSort(event.target.value as Sort)} aria-label="Ordenar sessões"><option value="date-desc">Data mais recente</option><option value="date-asc">Data mais antiga</option><option value="course">Curso</option><option value="studied-desc">Mais horas estudadas</option><option value="planned-desc">Mais horas planejadas</option></select>
-            </div>
+        <div className="studies-lower-grid">
+          <section className="card recent-studies-card"><div className="section-heading"><div><Clock3 size={19} /><h2>Registros recentes</h2></div><button className="link-button" type="button" onClick={() => setRecordsOpen(true)}>Ver todos os registros</button></div>{recentSessions.length ? <div className="recent-study-list">{recentSessions.map((session) => { const Icon = courseIcon(session.course.icon || session.course.name); return <button className="recent-study-item" type="button" key={session.id} onClick={() => openRegister(undefined, session)}><span className="recent-study-icon" style={{ color: session.course.color, background: pastelColor(session.course.color) }}><Icon size={18} /></span><span className="recent-study-copy"><strong>{session.course.name}</strong><small>{session.topic}</small></span><span className="recent-study-meta"><strong>{formatHours(session.studiedHours)}</strong><small>{formatDate(session.studyDate)}</small></span><MoreHorizontal size={17} /></button>; })}</div> : <EmptyState compact title="Nenhum registro recente" description="Seus estudos concluídos aparecerão aqui." />}</section>
 
-            {visibleSessions.length > 0 ? <div className="data-table-wrap"><table className="data-table study-session-table"><thead><tr><th>Data</th><th>Curso e assunto</th><th>Tipo</th><th>Planejado</th><th>Estudado</th><th>Status</th><th>Ações</th></tr></thead><tbody>{visibleSessions.map((session) => <tr key={session.id} className={session.deletedAt ? "archived-row" : ""}>
-              <td><span className="table-title">{formatDate(session.studyDate)}</span><span className="table-subtitle">{session.deletedAt ? "Na lixeira" : session.studyDate === today ? "Hoje" : "Sessão de estudo"}</span></td>
-              <td data-label="Curso e assunto"><span className="table-title">{session.course.name}</span><span className="table-subtitle">{session.topic}{session.notes ? ` • ${session.notes}` : ""}</span></td>
-              <td data-label="Tipo">{session.studyType.name}</td>
-              <td data-label="Planejado">{formatHours(session.plannedHours)}</td>
-              <td data-label="Estudado"><strong>{formatHours(session.studiedHours)}</strong></td>
-              <td data-label="Status"><Badge tone={sessionStatusTones[session.status]}>{sessionStatusLabels[session.status]}</Badge></td>
-              <td data-label="Ações"><div className="table-actions">{!session.deletedAt && <><button className="table-icon-button" type="button" onClick={() => openEdit(session)} aria-label={`Editar ${session.topic}`}><Pencil size={15} /></button><button className="table-icon-button" type="button" onClick={() => openDuplicate(session)} aria-label={`Duplicar ${session.topic}`}><Copy size={15} /></button><button className="table-icon-button danger-icon" type="button" onClick={() => remove(session)} disabled={loadingId === session.id} aria-label={`Excluir ${session.topic}`}>{loadingId === session.id ? <LoaderCircle className="spin" size={15} /> : <Trash2 size={15} />}</button></>}{session.deletedAt && <button className="table-icon-button" type="button" onClick={() => restore(session)} disabled={loadingId === session.id} aria-label={`Restaurar ${session.topic}`}>{loadingId === session.id ? <LoaderCircle className="spin" size={15} /> : <RotateCcw size={15} />}</button>}</div></td>
-            </tr>)}</tbody></table></div> : <div className="courses-empty"><BookOpen size={34} /><h3>{sessions.length === 0 ? "Nenhuma sessão registrada" : "Nenhuma sessão corresponde aos filtros"}</h3><p>{sessions.length === 0 ? "Registre seu primeiro estudo para alimentar automaticamente os indicadores desta tela." : "Limpe ou altere os filtros para localizar outros registros."}</p>{sessions.length === 0 && <button className="primary-button" type="button" onClick={openCreate} disabled={!databaseReady}><Plus size={16} /> Registrar primeiro estudo</button>}</div>}
-
-            <div className="table-footer"><span>Exibindo {visibleSessions.length ? (safePage - 1) * pageSize + 1 : 0} a {Math.min(safePage * pageSize, filtered.length)} de {filtered.length} registros</span><div className="pagination"><button className="page-button" type="button" disabled={safePage === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>‹</button>{Array.from({ length: Math.min(5, pages) }, (_, index) => index + 1).map((item) => <button key={item} className={`page-button ${safePage === item ? "active" : ""}`} type="button" onClick={() => setPage(item)}>{item}</button>)}<button className="page-button" type="button" disabled={safePage === pages} onClick={() => setPage((value) => Math.min(pages, value + 1))}>›</button></div></div>
-          </Panel>
-
-          <Panel title="Últimos Estudos" className="span-4">
-            <div className="list">{recentSessions.map((session) => <button className="list-item session-list-button" type="button" key={session.id} onClick={() => openEdit(session)}><div className="list-item-main"><div className="list-icon"><BookOpen size={15} /></div><div><strong>{session.course.name}</strong><small>{session.topic} • {formatDate(session.studyDate)} • {session.studyType.name}</small></div></div><span className="list-item-value">{formatHours(session.studiedHours)}</span></button>)}{recentSessions.length === 0 && <div className="panel-empty">Nenhum estudo realizado ainda.</div>}</div>
-          </Panel>
-
-          <Panel title="Horas por Área" className="span-4">
-            {areaRows.length ? <HorizontalBars rows={areaRows} /> : <div className="panel-empty">Registre horas para visualizar a distribuição por área.</div>}
-          </Panel>
-
-          <Panel title="Evolução Semanal" className="span-4">
-            <div className="weekly-chart" role="img" aria-label="Horas estudadas nas últimas oito semanas">{weeks.map((week) => <div className="weekly-column" key={week.start} title={`${formatDate(week.start)} a ${formatDate(week.end)}: ${formatHours(week.hours)}`}><span className="weekly-value">{week.hours > 0 ? formatHours(week.hours) : "0h"}</span><div className="weekly-track"><span style={{ height: `${(week.hours / maxWeekHours) * 100}%` }} /></div><small>{formatShortDate(week.start)}</small></div>)}</div>
-            <div className="weekly-caption"><Layers3 size={13} /> Semana inicia na segunda-feira; períodos sem estudo permanecem visíveis com zero.</div>
-          </Panel>
-
-          <Panel title={`Calendário de Consistência — últimos ${consistency.length} dias`} className="span-12">
-            <div className="consistency-layout">
-              <div>
-                <div className="consistency-heatmap" role="group" aria-label="Calendário de consistência">{consistency.map((day) => {
-                  const level = day.hours <= 0 ? 0 : day.hours < 1 ? 1 : day.hours < 2 ? 2 : 3;
-                  return <button key={day.date} type="button" className={`consistency-day level-${level} ${day.date === today ? "today" : ""} ${selectedConsistencyDate === day.date ? "selected" : ""}`} title={`${formatDate(day.date)}: ${formatHours(day.hours)} em ${day.sessionCount} sessão(ões)`} aria-label={`${formatDate(day.date)}: ${formatHours(day.hours)} estudadas`} onClick={() => setSelectedConsistencyDate(day.date)}><span>{day.date.slice(8, 10)}</span></button>;
-                })}</div>
-                <div className="heatmap-legend"><span><i /> Sem estudo</span><span><i className="level-1" /> Até 1h</span><span><i className="level-3" /> 2h ou mais</span></div>
-              </div>
-              <div className="consistency-detail">{selectedConsistencyDate ? <><div className="consistency-detail-header"><strong>{formatDate(selectedConsistencyDate)}</strong><button type="button" className="link-button" onClick={() => setSelectedConsistencyDate(null)}>Fechar</button></div>{selectedDaySessions.length ? <div className="list">{selectedDaySessions.map((session) => <button key={session.id} type="button" className="list-item session-list-button" onClick={() => openEdit(session)}><div className="list-item-main"><div className="list-icon"><CalendarCheck2 size={14} /></div><div><strong>{session.course.name}</strong><small>{session.topic}</small></div></div><span className="list-item-value">{formatHours(session.studiedHours)}</span></button>)}</div> : <div className="panel-empty">Nenhuma sessão registrada neste dia.</div>}</> : <div className="consistency-hint"><CalendarCheck2 size={28} /><strong>Clique em um dia</strong><span>Você verá as sessões e horas registradas naquela data.</span></div>}</div>
-            </div>
-          </Panel>
+          <section className="card consistency-card"><div className="section-heading"><div><Flame size={19} /><h2>Consistência</h2></div><span>{monthName}</span></div><div className="month-heatmap">{monthDays.map((day, index) => { const level = day.hours <= 0 ? 0 : day.hours < 1 ? 1 : day.hours < 2 ? 2 : 3; return <span key={`${day.date}-${index}`} className={`level-${level} ${day.inMonth ? "" : "outside"} ${day.date === today ? "today" : ""}`} title={`${formatDate(day.date)}: ${formatHours(day.hours)}`}>{Number(day.date.slice(8, 10))}</span>; })}</div><div className="consistency-summary"><strong>{studiedDaysThisMonth} dias estudados no mês</strong><small>{recentConsistencyDays} de {Math.max(1, consistencyDays)} dias recentes com estudo</small><span>Menos <i /><i className="level-1" /><i className="level-2" /><i className="level-3" /> Mais</span><p>Pequenos estudos frequentes constroem grandes resultados.</p></div></section>
         </div>
       </div>
 
-      {modalOpen && <StudySessionFormModal session={editing} seed={seed} courses={courses} studyTypes={studyTypes} defaultCourseId={defaultCourseId ?? currentCourseId} onClose={() => { setModalOpen(false); setEditing(null); setSeed(null); }} onSaved={saved} />}
+      {recordsOpen && <div className="drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setRecordsOpen(false); }}><aside className="records-drawer" role="dialog" aria-modal="true" aria-label="Todos os registros"><header><div><h2>Todos os registros</h2><p>Pesquise, edite, exclua ou restaure sessões.</p></div><button className="icon-action" type="button" onClick={() => setRecordsOpen(false)} aria-label="Fechar"><CheckCircle2 size={19} /></button></header><div className="search-box"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar curso, assunto ou observação" /></div><div className="records-list">{filteredRecords.map((session) => <article className={`record-card ${session.deletedAt ? "deleted" : ""}`} key={session.id}><div><strong>{session.course.name}</strong><span>{session.topic}</span><small>{formatDate(session.studyDate)} • {formatHours(session.studiedHours || session.plannedHours)} • {sessionStatusLabels[session.status]}</small></div><div>{session.deletedAt ? <button className="icon-button" type="button" onClick={() => restore(session)} aria-label="Restaurar"><RotateCcw size={16} /></button> : <><button className="icon-button" type="button" onClick={() => session.status === "PLANNED" ? openPlan(undefined, session) : openRegister(undefined, session)} aria-label="Editar"><Edit3 size={16} /></button><button className="icon-button danger-icon" type="button" onClick={() => remove(session)} aria-label="Excluir"><Trash2 size={16} /></button></>}</div></article>)}{filteredRecords.length === 0 && <EmptyState compact title="Nenhum registro encontrado" description="Tente outra busca." />}</div></aside></div>}
+
+      {modal.open && <StudySessionFormModal key={`${modal.mode}-${modal.session?.id ?? "new"}`} mode={modal.mode} session={modal.session} seed={modal.seed} courses={courses} studyTypes={studyTypes} defaultCourseId={defaultCourseId ?? currentCourseId} onClose={() => setModal({ open: false, mode: "register", session: null, seed: null })} onSaved={saved} />}
     </>
   );
 }

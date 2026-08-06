@@ -1,18 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { createElement, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, Award, BookOpen, Download, ExternalLink, FilePenLine, Pencil, Plus, ShieldCheck, Star } from "lucide-react";
-import { Badge, ProgressBar } from "@/components/ui";
+import { Archive, Award, BookOpen, Download, ExternalLink, FilePenLine, MoreHorizontal, Pencil, ShieldCheck, Star } from "lucide-react";
+import { Badge, EmptyState, ProgressBar } from "@/components/ui";
 import { CourseFormModal } from "@/components/courses/course-form-modal";
-import { courseKindLabels, coursePriorityLabels, coursePriorityTones, courseStatusLabels, courseStatusTones } from "@/lib/courses/constants";
-import { sessionStatusLabels, sessionStatusTones } from "@/lib/study-sessions/constants";
-import { noteCategoryTone } from "@/lib/notes/constants";
+import { courseStatusLabels, courseStatusTones } from "@/lib/courses/constants";
+import { courseIcon, pastelColor } from "@/lib/visuals";
 import type { Course, CourseListOption } from "@/types/course";
 import type { StudySession } from "@/types/study-session";
 import type { Note } from "@/types/note";
 import type { Certificate } from "@/types/certificate";
+
+type Tab = "overview" | "progress" | "resources" | "notes" | "certificates" | "history";
 
 function formatDate(value: string | null) {
   if (!value) return "Não informada";
@@ -21,17 +22,18 @@ function formatDate(value: string | null) {
 }
 
 function formatHours(value: number) {
-  const totalMinutes = Math.round(Math.max(0, value) * 60);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (!minutes) return `${hours}h`;
-  return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+  const minutes = Math.round(Math.max(0, value) * 60);
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${hours}h ${String(rest).padStart(2, "0")}m` : `${hours}h`;
 }
 
 export function CourseDetailClient({ initialCourse, platforms, areas, isCurrent, initialSessions, initialNotes, initialCertificates }: { initialCourse: Course; platforms: CourseListOption[]; areas: CourseListOption[]; isCurrent: boolean; initialSessions: StudySession[]; initialNotes: Note[]; initialCertificates: Certificate[] }) {
   const router = useRouter();
   const [course, setCourse] = useState(initialCourse);
+  const [tab, setTab] = useState<Tab>("overview");
   const [editing, setEditing] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [current, setCurrent] = useState(isCurrent);
   const [notice, setNotice] = useState<string | null>(null);
   const remaining = Math.max(course.workloadHours - course.studiedHours, 0);
@@ -40,38 +42,38 @@ export function CourseDetailClient({ initialCourse, platforms, areas, isCurrent,
     const response = await fetch("/api/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ currentCourseId: course.id }) });
     const payload = await response.json().catch(() => ({})) as { message?: string };
     if (!response.ok) { setNotice(payload.message ?? "Não foi possível definir o curso atual."); return; }
-    setCurrent(true); setNotice("Curso atual atualizado com sucesso."); router.refresh();
+    setCurrent(true); setNotice("Curso atual atualizado com sucesso."); setMenuOpen(false); router.refresh();
   }
 
   async function archive() {
     if (!window.confirm(`Arquivar “${course.name}”?`)) return;
     const response = await fetch(`/api/courses/${course.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ archived: true }) });
-    const payload = await response.json().catch(() => ({})) as { message?: string };
-    if (!response.ok) { setNotice(payload.message ?? "Não foi possível arquivar."); return; }
+    if (!response.ok) { const payload = await response.json().catch(() => ({})) as { message?: string }; setNotice(payload.message ?? "Não foi possível arquivar."); return; }
     router.push("/cursos"); router.refresh();
   }
 
-  return (
-    <div className="course-detail-page">
-      <div className="course-detail-toolbar"><Link className="secondary-button" href="/cursos">← Voltar para cursos</Link><div><Link className="primary-button" href={`/estudos?curso=${course.id}&novo=1`}><BookOpen size={15} /> Registrar estudo</Link><Link className="secondary-button" href={`/anotacoes?curso=${course.id}&novo=1`}><FilePenLine size={15} /> Nova anotação</Link><button className="secondary-button" type="button" onClick={() => setEditing(true)}><Pencil size={15} /> Editar</button><button className="secondary-button" type="button" onClick={setAsCurrent} disabled={current}><Star size={15} /> {current ? "Curso atual" : "Definir como atual"}</button><button className="danger-button" type="button" onClick={archive}><Archive size={15} /> Arquivar</button></div></div>
-      {notice && <div className="settings-notice success" role="status">{notice}</div>}
+  const tabs: Array<{ id: Tab; label: string }> = [
+    { id: "overview", label: "Visão geral" }, { id: "progress", label: "Progresso" }, { id: "resources", label: "Recursos" },
+    { id: "notes", label: "Anotações" }, { id: "certificates", label: "Certificados" }, { id: "history", label: "Histórico" },
+  ];
 
-      <section className="card course-detail-hero">
-        <div className="course-detail-icon">{course.kind === "CERTIFICATION" ? "C" : course.name.slice(0, 1).toUpperCase()}</div>
-        <div className="course-detail-title"><div className="detail-badges"><Badge tone={courseStatusTones[course.status]}>{courseStatusLabels[course.status]}</Badge><Badge tone={coursePriorityTones[course.priority]}>Prioridade {coursePriorityLabels[course.priority]}</Badge>{current && <Badge tone="blue">Curso atual</Badge>}</div><h1>{course.name}</h1><p>{courseKindLabels[course.kind]} • {course.platform.name} • {course.area.name}</p></div>
-        <div className="course-detail-progress"><div><span>Progresso</span><strong>{course.progress}%</strong></div><ProgressBar value={course.progress} /><small>{formatHours(course.studiedHours)} estudadas de {formatHours(course.workloadHours)}</small></div>
-      </section>
+  return <main className="course-detail-redesign" style={{ "--course-color": course.color, "--course-pastel": pastelColor(course.color) } as CSSProperties}>
+    <div className="course-detail-topbar"><Link className="text-button" href="/cursos">← Voltar para cursos</Link><div className="course-detail-actions"><Link className="primary-button" href={`/estudos?curso=${course.id}&novo=1`}><BookOpen size={16} /> Registrar estudo</Link><Link className="secondary-button" href={`/estudos?curso=${course.id}&planejar=1`}><BookOpen size={16} /> Planejar estudo</Link><Link className="secondary-button" href={`/anotacoes?curso=${course.id}&novo=1`}><FilePenLine size={16} /> Nova anotação</Link><button className="secondary-button" type="button" onClick={() => setEditing(true)}><Pencil size={16} /> Editar</button><div className="action-menu-wrap"><button className="icon-action" type="button" onClick={() => setMenuOpen((value) => !value)} aria-label="Mais ações"><MoreHorizontal size={18} /></button>{menuOpen && <div className="floating-action-menu"><button type="button" onClick={() => void setAsCurrent()} disabled={current}><Star size={15} /> {current ? "Curso atual" : "Definir como atual"}</button><button className="danger" type="button" onClick={() => void archive()}><Archive size={15} /> Arquivar</button></div>}</div></div></div>
+    {notice && <div className="settings-notice success" role="status">{notice}</div>}
 
-      <div className="course-detail-grid">
-        <section className="card course-detail-card"><h2>Resumo</h2><dl><div><dt>Tipo</dt><dd>{courseKindLabels[course.kind]}</dd></div><div><dt>Plataforma</dt><dd>{course.platform.name}</dd></div><div><dt>Área</dt><dd>{course.area.name}</dd></div><div><dt>Carga horária</dt><dd>{formatHours(course.workloadHours)}</dd></div><div><dt>Horas estudadas</dt><dd>{formatHours(course.studiedHours)}</dd></div><div><dt>Horas restantes</dt><dd>{formatHours(remaining)}</dd></div><div><dt>Emite certificado</dt><dd>{course.emitsCertificate ? "Sim" : "Não"}</dd></div></dl></section>
-        <section className="card course-detail-card"><h2>Datas</h2><dl><div><dt>Início</dt><dd>{formatDate(course.startDate)}</dd></div><div><dt>Meta de conclusão</dt><dd>{formatDate(course.targetCompletionDate)}</dd></div><div><dt>Conclusão</dt><dd>{formatDate(course.completionDate)}</dd></div><div><dt>Criado em</dt><dd>{new Date(course.createdAt).toLocaleDateString("pt-BR")}</dd></div><div><dt>Última alteração</dt><dd>{new Date(course.updatedAt).toLocaleDateString("pt-BR")}</dd></div></dl></section>
-        <section className="card course-detail-card course-detail-wide"><h2>Observações e acesso</h2><p className="course-detail-notes">{course.notes || "Nenhuma observação registrada."}</p>{course.url && <a className="primary-button detail-link" href={course.url} target="_blank" rel="noreferrer"><ExternalLink size={15} /> Abrir página do curso</a>}</section>
-        <section className="card course-detail-card course-detail-wide"><div className="course-history-header"><h2>Anotações vinculadas</h2><Link className="secondary-button compact-button" href={`/anotacoes?curso=${course.id}&novo=1`}><FilePenLine size={14} /> Nova anotação</Link></div>{initialNotes.length ? <div className="list">{initialNotes.slice(0, 5).map((note) => <Link href={`/anotacoes?curso=${course.id}`} className="list-item" key={note.id}><div><span className="table-title">{note.title}</span><span className="table-subtitle">{note.topic || note.content.slice(0, 100)}</span></div><Badge tone={noteCategoryTone(note.category.name)}>{note.category.name}</Badge></Link>)}</div> : <div className="courses-empty compact"><p>Nenhuma anotação vinculada a este curso.</p><Link className="primary-button" href={`/anotacoes?curso=${course.id}&novo=1`}><FilePenLine size={15} /> Criar anotação</Link></div>}</section>
-        <section className="card course-detail-card course-detail-wide"><div className="course-history-header"><h2>Certificados vinculados</h2><Link className="secondary-button compact-button" href={`/certificados?curso=${course.id}&novo=1`}><Plus size={14} /> Novo certificado</Link></div>{initialCertificates.length ? <div className="list">{initialCertificates.map((certificate) => <div className="list-item" key={certificate.id}><div className="list-item-main"><div className="list-icon" style={{ color: certificate.isAvailable ? "var(--success)" : "var(--warning)", background: certificate.isAvailable ? "var(--success-soft)" : "var(--warning-soft)" }}><Award size={15} /></div><div><strong>{certificate.isAvailable ? "Certificado disponível" : "Certificado pendente"}</strong><small>{certificate.issueDate ? `Emitido em ${formatDate(certificate.issueDate)}` : certificate.completionDate ? `Conclusão ${formatDate(certificate.completionDate)}` : "Sem data de emissão"}{certificate.credentialCode ? ` • ${certificate.credentialCode}` : ""}</small></div></div><div className="table-actions">{certificate.fileKey && <a className="table-icon-button" href={`/api/certificates/${certificate.id}/file?download=1`} title="Baixar arquivo"><Download size={14} /></a>}{certificate.validationUrl && <a className="table-icon-button" href={certificate.validationUrl} target="_blank" rel="noreferrer" title="Validar credencial"><ShieldCheck size={14} /></a>}</div></div>)}</div> : <div className="courses-empty compact"><p>Nenhum certificado vinculado a este curso.</p><Link className="primary-button" href={`/certificados?curso=${course.id}&novo=1`}><Award size={15} /> Adicionar certificado</Link></div>}</section>
-        <section className="card course-detail-card course-detail-wide"><div className="course-history-header"><h2>Histórico de estudos</h2><Link className="secondary-button compact-button" href={`/estudos?curso=${course.id}&novo=1`}><BookOpen size={14} /> Nova sessão</Link></div>{initialSessions.length ? <div className="data-table-wrap"><table className="data-table course-session-history"><thead><tr><th>Data</th><th>Assunto</th><th>Tipo</th><th>Planejado</th><th>Estudado</th><th>Status</th></tr></thead><tbody>{initialSessions.map((session) => <tr key={session.id}><td><span className="table-title">{formatDate(session.studyDate)}</span></td><td data-label="Assunto"><span className="table-title">{session.topic}</span><span className="table-subtitle">{session.notes || "Sem observações"}</span></td><td data-label="Tipo">{session.studyType.name}</td><td data-label="Planejado">{session.plannedHours === null ? "—" : formatHours(session.plannedHours)}</td><td data-label="Estudado"><strong>{formatHours(session.studiedHours)}</strong></td><td data-label="Status"><Badge tone={sessionStatusTones[session.status]}>{sessionStatusLabels[session.status]}</Badge></td></tr>)}</tbody></table></div> : <div className="courses-empty compact"><p>Nenhuma sessão registrada para este curso.</p><Link className="primary-button" href={`/estudos?curso=${course.id}&novo=1`}><BookOpen size={15} /> Registrar primeiro estudo</Link></div>}</section>
-      </div>
+    <section className="course-detail-hero-redesign"><div className="course-detail-icon-redesign">{createElement(courseIcon(course.icon, course.name), { size: 34 })}</div><div className="course-detail-heading"><div>{current && <Badge color={course.color}>Curso atual</Badge>}<Badge tone={courseStatusTones[course.status]}>{courseStatusLabels[course.status]}</Badge></div><h1>{course.name}</h1><p>{course.group === "LANGUAGE" ? "Idioma" : "Profissionalizante"} • {course.platform.name} • {course.area.name}</p></div><div className="course-detail-progress-redesign"><span>Progresso do curso</span><strong>{course.progress}%</strong><ProgressBar value={course.progress} color={course.color} /><small>{formatHours(course.studiedHours)} estudadas{course.workloadHours ? ` de ${formatHours(course.workloadHours)}` : ""}</small></div></section>
 
-      {editing && <CourseFormModal course={course} platforms={platforms} areas={areas} onClose={() => setEditing(false)} onSaved={(saved, message) => { setCourse(saved); setEditing(false); setNotice(message); router.refresh(); }} />}
-    </div>
-  );
+    <nav className="course-detail-tabs" aria-label="Seções do curso">{tabs.map((item) => <button key={item.id} type="button" className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}>{item.label}</button>)}</nav>
+
+    <section className="course-detail-tab-content">
+      {tab === "overview" && <div className="course-overview-grid"><article><h2>Informações principais</h2><dl><div><dt>Plataforma</dt><dd>{course.platform.name}</dd></div><div><dt>Categoria</dt><dd>{course.area.name}</dd></div><div><dt>Status</dt><dd>{courseStatusLabels[course.status]}</dd></div><div><dt>Meta semanal</dt><dd>{Math.round(course.weeklyGoalMinutes / 60 * 10) / 10}h</dd></div><div><dt>Início</dt><dd>{formatDate(course.startDate)}</dd></div><div><dt>Meta de conclusão</dt><dd>{formatDate(course.targetCompletionDate)}</dd></div></dl></article><article><h2>Seu objetivo</h2><p>{course.objective || course.notes || "Nenhum objetivo registrado para este curso."}</p>{course.group === "LANGUAGE" && <div className="level-flow"><span>{course.currentLevel || "Nível atual"}</span><b>→</b><span>{course.targetLevel || "Nível desejado"}</span></div>}<div className="next-activity"><strong>Próxima atividade</strong><span>{initialSessions.find((session) => session.status === "PLANNED")?.topic ?? "Planeje sua próxima sessão de estudo."}</span></div></article></div>}
+      {tab === "progress" && <div className="course-progress-panel"><div className="course-progress-big"><strong>{course.progress}%</strong><span>concluído</span></div><div><h2>Resumo de progresso</h2><ProgressBar value={course.progress} color={course.color} /><dl><div><dt>Horas estudadas</dt><dd>{formatHours(course.studiedHours)}</dd></div><div><dt>Horas restantes</dt><dd>{course.workloadHours ? formatHours(remaining) : "Carga livre"}</dd></div><div><dt>Sessões registradas</dt><dd>{initialSessions.length}</dd></div></dl></div></div>}
+      {tab === "resources" && <div className="course-resource-list"><h2>Recursos do curso</h2>{course.complementaryResources.length ? course.complementaryResources.map((resource) => <div key={resource}><ExternalLink size={16} /><span>{resource}</span></div>) : <EmptyState compact title="Nenhum recurso cadastrado" description="Edite o curso para adicionar livros, canais, plataformas e materiais complementares." />}{course.url && <a className="primary-button" href={course.url} target="_blank" rel="noreferrer"><ExternalLink size={16} /> Abrir curso</a>}</div>}
+      {tab === "notes" && <div><div className="course-tab-header"><h2>Anotações</h2><Link className="primary-button" href={`/anotacoes?curso=${course.id}&novo=1`}><FilePenLine size={15} /> Nova anotação</Link></div>{initialNotes.length ? <div className="course-note-grid">{initialNotes.map((note) => <Link key={note.id} href={`/anotacoes?curso=${course.id}`}><Badge color={note.category.color}>{note.category.name}</Badge><h3>{note.title}</h3><p>{note.content.slice(0, 130)}</p></Link>)}</div> : <EmptyState title="Nenhuma anotação vinculada" description="Crie resumos, dúvidas e revisões para este curso." />}</div>}
+      {tab === "certificates" && <div><div className="course-tab-header"><h2>Certificados</h2><Link className="primary-button" href={`/certificados?curso=${course.id}&novo=1`}><Award size={15} /> Adicionar certificado</Link></div>{initialCertificates.length ? <div className="course-certificate-list">{initialCertificates.map((certificate) => <article key={certificate.id}><Award size={20} /><div><strong>{certificate.isAvailable ? "Certificado obtido" : "Certificado pendente"}</strong><span>{formatDate(certificate.issueDate ?? certificate.completionDate)}</span></div>{certificate.fileKey && <a href={`/api/certificates/${certificate.id}/file?download=1`}><Download size={16} /></a>}{certificate.validationUrl && <a href={certificate.validationUrl} target="_blank" rel="noreferrer"><ShieldCheck size={16} /></a>}</article>)}</div> : <EmptyState title="Nenhum certificado" description="Quando concluir o curso, registre sua conquista aqui." />}</div>}
+      {tab === "history" && <div><div className="course-tab-header"><h2>Histórico de estudos</h2><Link className="primary-button" href={`/estudos?curso=${course.id}&novo=1`}><BookOpen size={15} /> Registrar estudo</Link></div>{initialSessions.length ? <div className="course-history-list">{initialSessions.map((session) => <article key={session.id}><span>{formatDate(session.studyDate)}</span><div><strong>{session.topic}</strong><small>{session.studyType.name}</small></div><b>{formatHours(session.studiedHours)}</b></article>)}</div> : <EmptyState title="Nenhum estudo registrado" description="Registre sua primeira sessão para iniciar o histórico." />}</div>}
+    </section>
+
+    {editing && <CourseFormModal course={course} platforms={platforms} areas={areas} onClose={() => setEditing(false)} onSaved={(saved, message) => { setCourse(saved); setEditing(false); setNotice(message); router.refresh(); }} />}
+  </main>;
 }

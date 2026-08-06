@@ -143,3 +143,33 @@ export function consistencyDays(sessions: StudySession[], today: string, count: 
     return { date, ...total };
   });
 }
+
+
+export function buildMonthGrid(sessions: StudySession[], today: string) {
+  const focus = dateFromKey(today);
+  const year = focus.getUTCFullYear();
+  const month = focus.getUTCMonth();
+  const first = new Date(Date.UTC(year, month, 1, 12));
+  const last = new Date(Date.UTC(year, month + 1, 0, 12));
+  const mondayOffset = (first.getUTCDay() + 6) % 7;
+  const totalCells = Math.ceil((mondayOffset + last.getUTCDate()) / 7) * 7;
+  const start = new Date(first);
+  start.setUTCDate(start.getUTCDate() - mondayOffset);
+
+  const totals = new Map<string, number>();
+  for (const session of sessions) {
+    if (session.deletedAt || session.studiedHours <= 0) continue;
+    totals.set(session.studyDate, (totals.get(session.studyDate) ?? 0) + session.studiedHours);
+  }
+
+  return Array.from({ length: totalCells }, (_, index) => {
+    const date = new Date(start);
+    date.setUTCDate(start.getUTCDate() + index);
+    const key = dateKey(date);
+    return {
+      date: key,
+      hours: totals.get(key) ?? 0,
+      inMonth: date.getUTCMonth() === month,
+    };
+  });
+}

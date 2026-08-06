@@ -1,4 +1,1 @@
-Sistema de Gestão de Estudos – Roberta
-Versão: 1.0.0
-Status: homologação final / produção após aprovação
-Data da release: 31/07/2026
+1.1.2

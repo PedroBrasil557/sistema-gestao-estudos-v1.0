@@ -24,7 +24,7 @@ export default async function CertificadosPage({ searchParams }: { searchParams:
     if (authData.user) {
       const [certificatesResult, coursesResult, settingsResult] = await Promise.all([
         supabase.from("certificates").select(certificateSelect).eq("user_id", authData.user.id).order("issue_date", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false }).limit(1000),
-        supabase.from("courses").select(`id,name,kind,workload_hours,completion_date,target_completion_date,status,emits_certificate,platform:platforms!courses_platform_id_fkey(id,name),area:areas!courses_area_id_fkey(id,name)`).eq("user_id", authData.user.id).is("archived_at", null).order("name"),
+        supabase.from("courses").select(`id,name,kind,course_group,color,icon,workload_hours,completion_date,target_completion_date,status,emits_certificate,platform:platforms!courses_platform_id_fkey(id,name),area:areas!courses_area_id_fkey(id,name)`).eq("user_id", authData.user.id).is("archived_at", null).order("name"),
         supabase.from("user_settings").select("annual_certificate_goal,tracking_year").eq("user_id", authData.user.id).maybeSingle(),
       ]);
       databaseReady = !certificatesResult.error && !coursesResult.error;
@@ -33,6 +33,9 @@ export default async function CertificadosPage({ searchParams }: { searchParams:
         id: String(row.id ?? ""),
         name: String(row.name ?? ""),
         kind: row.kind === "CERTIFICATION" ? "CERTIFICATION" : "COURSE",
+        group: row.course_group === "LANGUAGE" ? "LANGUAGE" : "PROFESSIONAL",
+        color: typeof row.color === "string" ? row.color : "#2F6BFF",
+        icon: typeof row.icon === "string" ? row.icon : "award",
         workloadHours: Number(row.workload_hours ?? 0) || 0,
         completionDate: typeof row.completion_date === "string" ? row.completion_date : null,
         targetCompletionDate: typeof row.target_completion_date === "string" ? row.target_completion_date : null,

@@ -12,8 +12,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ k
   const { data: authData } = await supabase.auth.getUser();
   if (!authData.user) return NextResponse.json({ message: "Sessão inválida." }, { status: 401 });
 
-  const payload = (await request.json().catch(() => null)) as { name?: string; archived?: boolean } | null;
-  if (!payload || (payload.name === undefined && payload.archived === undefined)) {
+  const payload = (await request.json().catch(() => null)) as { name?: string; archived?: boolean; color?: string } | null;
+  if (!payload || (payload.name === undefined && payload.archived === undefined && payload.color === undefined)) {
     return NextResponse.json({ message: "Nenhuma alteração foi informada." }, { status: 400 });
   }
 
@@ -41,13 +41,19 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ k
   if (payload.archived !== undefined) {
     update.archived_at = payload.archived ? new Date().toISOString() : null;
   }
+  if (payload.color !== undefined) {
+    const color = String(payload.color).toUpperCase();
+    if (kind !== "note-categories") return NextResponse.json({ message: "Esta lista não utiliza cores." }, { status: 422 });
+    if (!/^#[0-9A-F]{6}$/.test(color)) return NextResponse.json({ message: "Selecione uma cor válida." }, { status: 422 });
+    update.color = color;
+  }
 
   const { data, error } = await supabase
     .from(listTableMap[kind])
     .update(update)
     .eq("id", id)
     .eq("user_id", authData.user.id)
-    .select("id, name, is_system, archived_at")
+    .select("*")
     .maybeSingle();
 
   if (error) {
@@ -64,5 +70,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ k
     metadata: update,
   });
 
-  return NextResponse.json({ message: "Item atualizado com sucesso.", item: mapListItem(data as Record<string, unknown>) });
+  const item = mapListItem(data as unknown as Record<string, unknown>);
+
+  return NextResponse.json({
+    message: "Item atualizado com sucesso.",
+    item,
+  });
 }

@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import { listLabels } from "@/lib/settings/lists";
 import { DataManagementPanel } from "@/components/settings/data-management-panel";
+import { ColorPicker } from "@/components/ui";
+import { coursePalette } from "@/lib/visuals";
 import type {
   ConfigurableListItem,
   ConfigurableListKind,
@@ -36,7 +38,8 @@ import type {
 type Notice = { type: "success" | "error"; text: string } | null;
 type Tab = "geral" | "metas" | "listas" | "aparencia" | "privacidade" | "conta";
 
-const accentColors = ["#1768d3", "#159bb3", "#7655d8", "#14945b", "#ef8d20", "#dc4b4b", "#64748b"];
+const accentColors = ["#4454F4", "#2F6BFF", "#7C3AED", "#EC4899", "#16A34A", "#F97316", "#0D9488"];
+const sidebarColors = ["#061735", "#0A214A", "#172554", "#312E81", "#1F2937"];
 
 const tabs: { id: Tab; label: string; icon: typeof Settings2 }[] = [
   { id: "geral", label: "Geral", icon: Settings2 },
@@ -63,8 +66,10 @@ function ListManager({ initialLists }: { initialLists: ConfigurableLists }) {
   const [kind, setKind] = useState<ConfigurableListKind>("platforms");
   const [lists, setLists] = useState(initialLists);
   const [newName, setNewName] = useState("");
+  const [newColor, setNewColor] = useState("#7C3AED");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [editingColor, setEditingColor] = useState("#7C3AED");
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
@@ -93,7 +98,7 @@ function ListManager({ initialLists }: { initialLists: ConfigurableLists }) {
     const response = await fetch(`/api/lists/${kind}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, ...(kind === "note-categories" ? { color: newColor } : {}) }),
     });
     const payload = (await response.json().catch(() => ({}))) as { message?: string; item?: ConfigurableListItem };
     setAdding(false);
@@ -105,10 +110,11 @@ function ListManager({ initialLists }: { initialLists: ConfigurableLists }) {
 
     setLists((current) => ({ ...current, [kind]: [...current[kind], payload.item!] }));
     setNewName("");
+    setNewColor("#7C3AED");
     setNotice({ type: "success", text: payload.message ?? "Item adicionado." });
   }
 
-  async function updateItem(id: string, body: { name?: string; archived?: boolean }) {
+  async function updateItem(id: string, body: { name?: string; archived?: boolean; color?: string }) {
     setNotice(null);
     setLoadingId(id);
     const response = await fetch(`/api/lists/${kind}/${id}`, {
@@ -161,6 +167,7 @@ function ListManager({ initialLists }: { initialLists: ConfigurableLists }) {
             placeholder={`Ex.: ${kind === "platforms" ? "Coursera" : kind === "areas" ? "Administração" : kind === "study-types" ? "Laboratório" : "Checklist"}`}
             maxLength={80}
           />
+          {kind === "note-categories" && <div className="list-color-field"><span>Cor padrão</span><ColorPicker value={newColor} onChange={setNewColor} colors={coursePalette} /></div>}
         </div>
         <button className="primary-button" type="submit" disabled={adding}>
           {adding ? <LoaderCircle className="spin" size={16} /> : <Plus size={16} />}
@@ -177,17 +184,20 @@ function ListManager({ initialLists }: { initialLists: ConfigurableLists }) {
             <div className="config-list-row" key={item.id}>
               {editingId === item.id ? (
                 <>
-                  <input className="form-control" value={editingName} onChange={(event) => setEditingName(event.target.value)} maxLength={80} autoFocus />
+                  <div className="config-list-edit-fields">
+                    <input className="form-control" value={editingName} onChange={(event) => setEditingName(event.target.value)} maxLength={80} autoFocus />
+                    {kind === "note-categories" && <ColorPicker value={editingColor} onChange={setEditingColor} colors={coursePalette} />}
+                  </div>
                   <div className="row-actions">
-                    <button type="button" className="icon-action success" aria-label="Salvar nome" disabled={loadingId === item.id} onClick={() => updateItem(item.id, { name: editingName })}><Check size={15} /></button>
+                    <button type="button" className="icon-action success" aria-label="Salvar alterações" disabled={loadingId === item.id} onClick={() => updateItem(item.id, { name: editingName, ...(kind === "note-categories" ? { color: editingColor } : {}) })}><Check size={15} /></button>
                     <button type="button" className="icon-action" aria-label="Cancelar edição" onClick={() => { setEditingId(null); setEditingName(""); }}><X size={15} /></button>
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="config-list-copy"><strong>{item.name}</strong><small>{item.isSystem ? "Valor inicial do sistema" : "Criado por você"}</small></div>
+                  <div className="config-list-copy"><strong>{kind === "note-categories" && <i className="category-color-dot" style={{ background: item.color ?? "#7C3AED" }} />}{item.name}</strong><small>{item.isSystem ? "Valor inicial do sistema" : "Criado por você"}</small></div>
                   <div className="row-actions">
-                    <button type="button" className="icon-action" aria-label={`Renomear ${item.name}`} onClick={() => { setEditingId(item.id); setEditingName(item.name); }}><Pencil size={15} /></button>
+                    <button type="button" className="icon-action" aria-label={`Editar ${item.name}`} onClick={() => { setEditingId(item.id); setEditingName(item.name); setEditingColor(item.color ?? "#7C3AED"); }}><Pencil size={15} /></button>
                     <button type="button" className="icon-action warning" aria-label={`Arquivar ${item.name}`} disabled={loadingId === item.id} onClick={() => updateItem(item.id, { archived: true })}>{loadingId === item.id ? <LoaderCircle className="spin" size={15} /> : <Archive size={15} />}</button>
                   </div>
                 </>
@@ -325,11 +335,17 @@ export function SettingsCenter({ initialSettings, initialLists, databaseReady }:
             <section className="settings-live-card settings-full-card">
               <div className="settings-card-heading"><div><Palette size={19} /><div><h2>Aparência do sistema</h2><p>O tema e a cor são aplicados depois de salvar.</p></div></div></div>
               <div className="form-field"><label>Tema</label><div className="theme-options interactive"><button type="button" className={`theme-option ${settings.theme === "light" ? "active" : ""}`} onClick={() => update("theme", "light")}><Sun size={20} /><span>Claro</span></button><button type="button" className={`theme-option ${settings.theme === "dark" ? "active" : ""}`} onClick={() => update("theme", "dark")}><Moon size={20} /><span>Escuro</span></button><button type="button" className={`theme-option ${settings.theme === "system" ? "active" : ""}`} onClick={() => update("theme", "system")}><Monitor size={20} /><span>Sistema</span></button></div></div>
-              <div className="form-field"><label>Cor principal</label><div className="color-options">{accentColors.map((color) => <button key={color} type="button" className={`color-swatch ${settings.accentColor === color ? "active" : ""}`} style={{ background: color }} aria-label={`Selecionar cor ${color}`} onClick={() => update("accentColor", color)} />)}</div></div>
+              <div className="appearance-color-grid">
+                <div className="form-field"><label>Cor principal</label><div className="color-options">{accentColors.map((color) => <button key={color} type="button" className={`color-swatch ${settings.accentColor === color ? "active" : ""}`} style={{ background: color }} aria-label={`Selecionar cor ${color}`} onClick={() => update("accentColor", color)} />)}</div></div>
+                <div className="form-field"><label>Cor do menu</label><div className="color-options">{sidebarColors.map((color) => <button key={color} type="button" className={`color-swatch ${settings.sidebarColor === color ? "active" : ""}`} style={{ background: color }} aria-label={`Selecionar cor do menu ${color}`} onClick={() => update("sidebarColor", color)} />)}</div></div>
+                <div className="form-field"><label>Cor dos botões</label><div className="color-options">{accentColors.map((color) => <button key={color} type="button" className={`color-swatch ${settings.buttonColor === color ? "active" : ""}`} style={{ background: color }} aria-label={`Selecionar cor dos botões ${color}`} onClick={() => update("buttonColor", color)} />)}</div></div>
+              </div>
               <div className="settings-fields-grid">
+                <div className="form-field"><label htmlFor="card-tone">Tonalidade dos cartões</label><select id="card-tone" className="form-control" value={settings.cardTone} onChange={(event) => update("cardTone", event.target.value as UserSettings["cardTone"])}><option value="soft">Suave e colorida</option><option value="neutral">Neutra</option><option value="vivid">Mais colorida</option></select></div>
                 <div className="form-field"><label htmlFor="density">Densidade da interface</label><select id="density" className="form-control" value={settings.interfaceDensity} onChange={(event) => update("interfaceDensity", event.target.value as UserSettings["interfaceDensity"])}><option value="compact">Compacta</option><option value="default">Padrão</option><option value="comfortable">Confortável</option></select></div>
                 <div className="form-field"><label htmlFor="rounding">Arredondamento</label><select id="rounding" className="form-control" value={settings.rounding} onChange={(event) => update("rounding", event.target.value as UserSettings["rounding"])}><option value="small">Menor</option><option value="default">Padrão</option><option value="large">Maior</option></select></div>
               </div>
+              <button className="secondary-button restore-theme-button" type="button" onClick={() => setSettings((current) => ({ ...current, accentColor: "#4454F4", sidebarColor: "#061735", buttonColor: "#4454F4", cardTone: "soft", theme: "light" }))}><RotateCcw size={16} /> Restaurar tema padrão</button>
             </section>
           )}
 

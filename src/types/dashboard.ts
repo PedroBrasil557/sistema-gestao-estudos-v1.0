@@ -1,4 +1,4 @@
-import type { CourseStatus } from "@/types/course";
+import type { CourseGroup, CourseStatus } from "@/types/course";
 
 export type DashboardRange = "7d" | "30d" | "month" | "year" | "all" | "custom";
 
@@ -6,6 +6,7 @@ export type DashboardFilters = {
   range: DashboardRange;
   start: string | null;
   end: string | null;
+  group: CourseGroup | null;
   areaId: string | null;
   platformId: string | null;
   courseStatus: CourseStatus | null;
@@ -14,17 +15,8 @@ export type DashboardFilters = {
 
 export type DashboardFilterOption = { id: string; name: string };
 
-export type DashboardMetric = {
-  value: number;
-  label: string;
-};
-
 export type DashboardData = {
-  period: {
-    label: string;
-    start: string | null;
-    end: string | null;
-  };
+  period: { label: string; start: string | null; end: string | null };
   metrics: {
     totalHours: number;
     completedCourses: number;
@@ -33,16 +25,21 @@ export type DashboardData = {
     monthlyAverageHours: number;
     generalProgress: number;
   };
+  dailyEvolution: Array<{ date: string; label: string; hours: number }>;
   monthlyEvolution: Array<{ key: string; label: string; hours: number }>;
+  timeDistribution: Array<{ id: string; label: string; color: string; hours: number; share: number }>;
   hoursByArea: Array<{ label: string; hours: number }>;
   coursesByStatus: Array<{ status: CourseStatus; label: string; count: number }>;
   courseProgress: Array<{
     id: string;
     name: string;
+    group: CourseGroup;
+    color: string;
     progress: number;
     priority: "HIGH" | "MEDIUM" | "LOW";
     remainingHours: number;
   }>;
+  languageSkills: Array<{ key: string; label: string; hours: number; share: number }>;
   studyTypes: Array<{ label: string; hours: number; sessions: number }>;
   platforms: Array<{ label: string; hours: number; courses: number }>;
   deadlines: Array<{ id: string; name: string; date: string; daysRemaining: number }>;

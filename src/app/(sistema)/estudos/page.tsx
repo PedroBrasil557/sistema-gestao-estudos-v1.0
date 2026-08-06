@@ -9,7 +9,7 @@ function relation(value: unknown): Record<string, unknown> {
   return row && typeof row === "object" ? row as Record<string, unknown> : {};
 }
 
-export default async function EstudosPage({ searchParams }: { searchParams: Promise<{ curso?: string; novo?: string }> }) {
+export default async function EstudosPage({ searchParams }: { searchParams: Promise<{ curso?: string; novo?: string; planejar?: string }> }) {
   const params = await searchParams;
   let sessions: StudySession[] = [];
   let courses: StudyCourseOption[] = [];
@@ -31,6 +31,10 @@ export default async function EstudosPage({ searchParams }: { searchParams: Prom
           name,
           status,
           priority,
+          course_group,
+          color,
+          icon,
+          weekly_goal_minutes,
           archived_at,
           workload_hours,
           studied_hours,
@@ -52,6 +56,10 @@ export default async function EstudosPage({ searchParams }: { searchParams: Prom
           name: String(row.name),
           status: row.status as StudyCourseOption["status"],
           priority: row.priority as StudyCourseOption["priority"],
+          group: row.course_group === "LANGUAGE" ? "LANGUAGE" : "PROFESSIONAL",
+          color: typeof row.color === "string" ? row.color : "#2F6BFF",
+          icon: typeof row.icon === "string" ? row.icon : "book-open",
+          weeklyGoalMinutes: Number(row.weekly_goal_minutes ?? 0),
           archivedAt: typeof row.archived_at === "string" ? row.archived_at : null,
           workloadHours: Number(row.workload_hours ?? 0),
           studiedHours: Number(row.studied_hours ?? 0),
@@ -82,7 +90,8 @@ export default async function EstudosPage({ searchParams }: { searchParams: Prom
       defaultCourseId={requestedCourseId ?? savedCurrentCourseId}
       timezone={timezone}
       consistencyDays={configuredConsistencyDays}
-      initialOpen={params.novo === "1"}
+      initialOpen={params.novo === "1" || params.planejar === "1"}
+      initialMode={params.planejar === "1" ? "plan" : "register"}
     />
   );
 }

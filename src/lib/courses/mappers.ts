@@ -1,4 +1,5 @@
 import type { Course } from "@/types/course";
+import { isLanguageName, suggestedCourseColor } from "@/lib/visuals";
 
 function relation(value: unknown): { id: string; name: string } {
   const row = Array.isArray(value) ? value[0] : value;
@@ -17,18 +18,34 @@ function number(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function stringArray(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => String(item).trim()).filter(Boolean).slice(0, 20);
+}
+
 export function mapCourseRow(row: Record<string, unknown>): Course {
   const workloadHours = number(row.workload_hours);
   const studiedHours = number(row.studied_hours);
   const completed = row.status === "COMPLETED";
   const progress = completed ? 100 : workloadHours > 0 ? Math.min((studiedHours / workloadHours) * 100, 100) : 0;
+  const platform = relation(row.platform);
+  const area = relation(row.area);
+  const name = String(row.name ?? "Curso");
 
   return {
     id: String(row.id),
-    name: String(row.name),
+    name,
     kind: row.kind as Course["kind"],
-    platform: relation(row.platform),
-    area: relation(row.area),
+    group: row.course_group === "LANGUAGE" || (row.course_group == null && isLanguageName(name, area.name)) ? "LANGUAGE" : "PROFESSIONAL",
+    color: typeof row.color === "string" ? row.color : suggestedCourseColor(name, area.name),
+    icon: typeof row.icon === "string" ? row.icon : "book-open",
+    weeklyGoalMinutes: number(row.weekly_goal_minutes),
+    currentLevel: typeof row.current_level === "string" ? row.current_level : null,
+    targetLevel: typeof row.target_level === "string" ? row.target_level : null,
+    objective: typeof row.objective === "string" ? row.objective : null,
+    complementaryResources: stringArray(row.complementary_resources),
+    platform,
+    area,
     workloadHours,
     studiedHours,
     progress: Math.round(progress * 10) / 10,
@@ -50,6 +67,14 @@ export const courseSelect = `
   id,
   name,
   kind,
+  course_group,
+  color,
+  icon,
+  weekly_goal_minutes,
+  current_level,
+  target_level,
+  objective,
+  complementary_resources,
   workload_hours,
   studied_hours,
   status,

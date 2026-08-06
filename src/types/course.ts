@@ -1,4 +1,5 @@
 export type CourseKind = "COURSE" | "CERTIFICATION";
+export type CourseGroup = "LANGUAGE" | "PROFESSIONAL";
 export type CourseStatus = "PLANNED" | "NOT_STARTED" | "IN_PROGRESS" | "PAUSED" | "COMPLETED" | "CANCELLED";
 export type CoursePriority = "HIGH" | "MEDIUM" | "LOW";
 
@@ -11,6 +12,14 @@ export type Course = {
   id: string;
   name: string;
   kind: CourseKind;
+  group: CourseGroup;
+  color: string;
+  icon: string;
+  weeklyGoalMinutes: number;
+  currentLevel: string | null;
+  targetLevel: string | null;
+  objective: string | null;
+  complementaryResources: string[];
   platform: CourseListOption;
   area: CourseListOption;
   workloadHours: number;
@@ -32,6 +41,14 @@ export type Course = {
 export type CourseInput = {
   name: string;
   kind: CourseKind;
+  group: CourseGroup;
+  color: string;
+  icon: string;
+  weeklyGoalMinutes: number;
+  currentLevel: string | null;
+  targetLevel: string | null;
+  objective: string | null;
+  complementaryResources: string[];
   platformId: string;
   areaId: string;
   workloadHours: number;

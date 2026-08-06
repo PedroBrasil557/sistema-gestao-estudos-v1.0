@@ -1,25 +1,43 @@
+"use client";
+
 import type { ReactNode } from "react";
-import { Bell, CalendarDays } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 
 export function PageHeader({
   title,
   subtitle,
   actions,
+  timezone = "America/Sao_Paulo",
 }: {
   title: string;
   subtitle: string;
   actions?: ReactNode;
+  timezone?: string;
 }) {
+  const now = new Date();
+  const date = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: timezone,
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(now);
+  const weekday = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: timezone,
+    weekday: "long",
+  }).format(now);
+
   return (
-    <header className="topbar">
+    <header className="topbar redesign-topbar">
       <div className="topbar-copy">
         <h1>{title}</h1>
         <p>{subtitle}</p>
       </div>
       <div className="topbar-actions">
+        <div className="date-display" aria-label={`${weekday}, ${date}`}>
+          <CalendarDays size={18} />
+          <span><strong>{weekday}, {date}</strong></span>
+        </div>
         {actions}
-        <div className="date-display"><CalendarDays size={18} /><span><strong>23 de junho de 2025</strong><small>Segunda-feira</small></span></div>
-        <button className="icon-button" aria-label="Notificações" type="button"><Bell size={19} /><span className="notification-dot">3</span></button>
       </div>
     </header>
   );

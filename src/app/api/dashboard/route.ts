@@ -10,13 +10,15 @@ import {
   priorityWeight,
   resolvePeriod,
 } from "@/lib/dashboard/calculations";
-import type { CourseStatus } from "@/types/course";
+import type { CourseGroup, CourseStatus } from "@/types/course";
 import type { DashboardData, DashboardRange } from "@/types/dashboard";
 
 
 type DashboardCourse = {
   id: string;
   name: string;
+  group: CourseGroup;
+  color: string;
   workloadHours: number;
   studiedHours: number;
   status: CourseStatus;
@@ -66,7 +68,7 @@ async function allStudySessions(
     let query = supabase
       .from("study_sessions")
       .select(`
-        id, course_id, study_type_id, study_date, topic, studied_hours, status, updated_at,
+        id, course_id, study_type_id, study_date, topic, studied_hours, status, updated_at, language_skill,
         study_type:study_types!study_sessions_study_type_id_fkey(id, name)
       `)
       .eq("user_id", userId)
@@ -117,6 +119,8 @@ export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const rawRange = params.get("range") as DashboardRange | null;
   const range: DashboardRange = rawRange && validRanges.has(rawRange) ? rawRange : "month";
+  const rawGroup = params.get("group") as CourseGroup | null;
+  const group = rawGroup === "LANGUAGE" || rawGroup === "PROFESSIONAL" ? rawGroup : null;
   const areaId = params.get("areaId") || null;
   const platformId = params.get("platformId") || null;
   const studyTypeId = params.get("studyTypeId") || null;
@@ -136,13 +140,14 @@ export async function GET(request: NextRequest) {
   let coursesQuery = supabase
     .from("courses")
     .select(`
-      id, name, kind, workload_hours, studied_hours, status, priority,
+      id, name, kind, course_group, color, workload_hours, studied_hours, status, priority,
       target_completion_date, completion_date, archived_at,
       platform:platforms!courses_platform_id_fkey(id, name),
       area:areas!courses_area_id_fkey(id, name)
     `)
     .eq("user_id", authData.user.id)
     .is("archived_at", null);
+  if (group) coursesQuery = coursesQuery.eq("course_group", group);
   if (areaId) coursesQuery = coursesQuery.eq("area_id", areaId);
   if (platformId) coursesQuery = coursesQuery.eq("platform_id", platformId);
   if (courseStatus) coursesQuery = coursesQuery.eq("status", courseStatus);
@@ -155,6 +160,8 @@ export async function GET(request: NextRequest) {
     return {
       id: String(row.id),
       name: String(row.name),
+      group: row.course_group === "LANGUAGE" ? "LANGUAGE" : "PROFESSIONAL",
+      color: typeof row.color === "string" ? row.color : "#2F6BFF",
       workloadHours: numeric(row.workload_hours),
       studiedHours: numeric(row.studied_hours),
       status: row.status as CourseStatus,
@@ -186,6 +193,7 @@ export async function GET(request: NextRequest) {
       status: String(row.status ?? ""),
       updatedAt: String(row.updated_at ?? ""),
       studyType: String(type.name ?? "Tipo não informado"),
+      languageSkill: typeof row.language_skill === "string" ? row.language_skill : null,
     };
   });
 
@@ -223,12 +231,28 @@ export async function GET(request: NextRequest) {
   }
   const monthlyEvolution = monthKeys.map((key) => ({ key, label: monthLabel(key), hours: monthlyMap.get(key) ?? 0 }));
 
+  const dailyEnd = period.end ?? today;
+  const requestedDailyStart = period.start ?? addDays(dailyEnd, -6);
+  const dailySpan = Math.max(0, daysBetween(requestedDailyStart, dailyEnd));
+  const dailyStart = dailySpan > 30 ? addDays(dailyEnd, -29) : requestedDailyStart;
+  const dailyMap = new Map<string, number>();
+  for (const session of sessions) dailyMap.set(session.studyDate, (dailyMap.get(session.studyDate) ?? 0) + session.studiedHours);
+  const dailyEvolution: DashboardData["dailyEvolution"] = [];
+  for (let date = dailyStart; date <= dailyEnd; date = addDays(date, 1)) {
+    dailyEvolution.push({ date, label: date.slice(8, 10) + "/" + date.slice(5, 7), hours: dailyMap.get(date) ?? 0 });
+    if (dailyEvolution.length >= 31) break;
+  }
+
   const areaMap = new Map<string, number>();
+  const courseHoursMap = new Map<string, number>();
+  const skillMap = new Map<string, number>();
   const typeMap = new Map<string, { hours: number; sessions: number }>();
   const platformMap = new Map<string, { hours: number; courses: Set<string> }>();
   for (const session of sessions) {
     const course = courseMap.get(session.courseId);
     if (!course) continue;
+    courseHoursMap.set(course.id, (courseHoursMap.get(course.id) ?? 0) + session.studiedHours);
+    if (course.group === "LANGUAGE" && session.languageSkill) skillMap.set(session.languageSkill, (skillMap.get(session.languageSkill) ?? 0) + session.studiedHours);
     areaMap.set(course.area, (areaMap.get(course.area) ?? 0) + session.studiedHours);
     const type = typeMap.get(session.studyType) ?? { hours: 0, sessions: 0 };
     type.hours += session.studiedHours;
@@ -245,6 +269,20 @@ export async function GET(request: NextRequest) {
     platformMap.set(course.platform, platform);
   }
 
+  const timeDistribution = [...courseHoursMap.entries()]
+    .map(([id, hours]) => { const course = courseMap.get(id)!; return { id, label: course.name, color: course.color, hours, share: totalHours > 0 ? hours / totalHours * 100 : 0 }; })
+    .sort((a, b) => b.hours - a.hours)
+    .slice(0, 8);
+
+  const skillLabels: Record<string, string> = {
+    READING: "Leitura", WRITING: "Escrita", SPEAKING: "Conversação", LISTENING: "Compreensão auditiva",
+    PRONUNCIATION: "Pronúncia", GRAMMAR: "Gramática", VOCABULARY: "Vocabulário", REVIEW: "Revisão",
+  };
+  const languageSkillHours = [...skillMap.values()].reduce((sum, value) => sum + value, 0);
+  const languageSkills = [...skillMap.entries()]
+    .map(([key, hours]) => ({ key, label: skillLabels[key] ?? key, hours, share: languageSkillHours > 0 ? hours / languageSkillHours * 100 : 0 }))
+    .sort((a, b) => b.hours - a.hours);
+
   const statusOrder: CourseStatus[] = ["PLANNED", "NOT_STARTED", "IN_PROGRESS", "PAUSED", "COMPLETED", "CANCELLED"];
   const coursesByStatus = statusOrder.map((status) => ({
     status,
@@ -257,6 +295,8 @@ export async function GET(request: NextRequest) {
     .map((course) => ({
       id: course.id,
       name: course.name,
+      group: course.group,
+      color: course.color,
       priority: course.priority,
       progress: course.status === "COMPLETED" ? 100 : course.workloadHours > 0 ? Math.min(100, (course.studiedHours / course.workloadHours) * 100) : 0,
       remainingHours: Math.max(course.workloadHours - course.studiedHours, 0),
@@ -353,10 +393,13 @@ export async function GET(request: NextRequest) {
       monthlyAverageHours,
       generalProgress,
     },
+    dailyEvolution,
     monthlyEvolution,
+    timeDistribution,
     hoursByArea,
     coursesByStatus,
     courseProgress,
+    languageSkills,
     studyTypes,
     platforms,
     deadlines,

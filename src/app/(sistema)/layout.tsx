@@ -16,6 +16,9 @@ export default async function SystemLayout({ children }: { children: ReactNode }
     accentColor: defaultUserSettings.accentColor,
     interfaceDensity: defaultUserSettings.interfaceDensity,
     rounding: defaultUserSettings.rounding,
+    sidebarColor: defaultUserSettings.sidebarColor,
+    buttonColor: defaultUserSettings.buttonColor,
+    cardTone: defaultUserSettings.cardTone,
   };
 
   const configured = isSupabaseConfigured();
@@ -29,7 +32,7 @@ export default async function SystemLayout({ children }: { children: ReactNode }
 
     const [profileResult, settingsResult] = await Promise.all([
       supabase.from("profiles").select("name, avatar_url").eq("id", data.user.id).maybeSingle(),
-      supabase.from("user_settings").select("theme, accent_color, interface_density, rounding").eq("user_id", data.user.id).maybeSingle(),
+      supabase.from("user_settings").select("theme, accent_color, interface_density, rounding, sidebar_color, button_color, card_tone").eq("user_id", data.user.id).maybeSingle(),
     ]);
 
     user = {
@@ -49,6 +52,9 @@ export default async function SystemLayout({ children }: { children: ReactNode }
         accentColor: mapped.accentColor,
         interfaceDensity: mapped.interfaceDensity,
         rounding: mapped.rounding,
+        sidebarColor: mapped.sidebarColor,
+        buttonColor: mapped.buttonColor,
+        cardTone: mapped.cardTone,
       };
     }
   }

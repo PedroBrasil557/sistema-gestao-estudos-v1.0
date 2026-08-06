@@ -31,6 +31,7 @@ export function mapListItem(row: Record<string, unknown>): ConfigurableListItem 
   return {
     id: String(row.id),
     name: String(row.name),
+    color: typeof row.color === "string" ? row.color : undefined,
     isSystem: Boolean(row.is_system),
     archivedAt: typeof row.archived_at === "string" ? row.archived_at : null,
   };

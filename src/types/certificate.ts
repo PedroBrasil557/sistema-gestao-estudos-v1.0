@@ -2,6 +2,9 @@ export type CertificateCourse = {
   id: string;
   name: string;
   kind: "COURSE" | "CERTIFICATION";
+  group: "LANGUAGE" | "PROFESSIONAL";
+  color: string;
+  icon: string;
   workloadHours: number;
   completionDate: string | null;
   targetCompletionDate: string | null;

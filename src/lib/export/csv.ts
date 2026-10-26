@@ -10,7 +10,10 @@ export function escapeCsvValue(value: unknown): string {
     : typeof value === "object"
       ? JSON.stringify(value)
       : String(value);
-  const escaped = normalized.replace(/"/g, '""');
+  // Neutraliza CSV/formula injection: valores iniciando com = + - @ TAB ou CR
+  // podem ser interpretados como fórmula pelo Excel/LibreOffice. Prefixa com '.
+  const guarded = /^[=+\-@\t\r]/.test(normalized) ? `'${normalized}` : normalized;
+  const escaped = guarded.replace(/"/g, '""');
   return /[",\n\r;]/.test(escaped) ? `"${escaped}"` : escaped;
 }
 
